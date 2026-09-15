@@ -168,7 +168,7 @@
     <div class="placeholder-btn" id="placeholderHint">Select an image below</div>
     <div class="divider" id="divider"><div class="bar"></div></div>
   </div>
-  <div class="hint">📌 Drag the image to reposition · use "Zoom" to crop tighter</div>
+  <div class="hint">📌 Drag the image to reposition · use "Zoom" to crop tighter · tap a word in the text to turn it red</div>
 
   <div class="controls">
     <div class="row">
@@ -181,7 +181,7 @@
 
     <button id="colorCycleBtn" class="colorBtn">
       <span class="swatchPair" id="swatchPreview"><span id="swatchBg"></span><span id="swatchText"></span></span>
-      <span id="comboLabel">Combo 1 / 9 — tap to change</span>
+      <span id="comboLabel">Black text / White background — tap to switch</span>
     </button>
 
     <label class="small">Font Size <span id="fontSizeVal">56</span>px
@@ -219,49 +219,11 @@
   const FONT_STACK = '"Anton", "Poppins", Arial, sans-serif';
   const WATERMARK_TEXT = 'RELATIONSHIP CUES';
 
-  // 33 curated, minimalist Pinterest-style hue pairs — each expands into
-  // a light-bg and a dark-bg combo below, giving 66 total combinations.
-  const PALETTE = [
-    { name: 'Ivory',        tint: '#F7F3EC', deep: '#2B2620' },
-    { name: 'Pure',         tint: '#FAFAFA', deep: '#111111' },
-    { name: 'Sage',         tint: '#E4EADF', deep: '#2F4538' },
-    { name: 'Blush',        tint: '#F5DEDC', deep: '#5C2A2A' },
-    { name: 'Powder Blue',  tint: '#DCE8F3', deep: '#1F3A5F' },
-    { name: 'Lavender',     tint: '#E7DEF2', deep: '#3B2A52' },
-    { name: 'Butter',       tint: '#F6EBC8', deep: '#4A3E1E' },
-    { name: 'Terracotta',   tint: '#EAC9B9', deep: '#4A2E23' },
-    { name: 'Mint',         tint: '#DCEFE6', deep: '#1E4B3D' },
-    { name: 'Peach',        tint: '#F5DFC9', deep: '#7A3B1E' },
-    { name: 'Dusty Rose',   tint: '#EAD2D2', deep: '#5A2E36' },
-    { name: 'Steel Blue',   tint: '#D9E2EA', deep: '#253746' },
-    { name: 'Khaki',        tint: '#E9E4C9', deep: '#4B4A2A' },
-    { name: 'Mauve',        tint: '#E6D7DE', deep: '#4B2C3D' },
-    { name: 'Sand',         tint: '#EDE3D3', deep: '#4A3A2C' },
-    { name: 'Coral',        tint: '#F6DCD3', deep: '#6E3327' },
-    { name: 'Cool Grey',    tint: '#E7E7E7', deep: '#2A2A2A' },
-    { name: 'Taupe',        tint: '#E5DED4', deep: '#3E362B' },
-    { name: 'Warm Ivory',   tint: '#F1E9DD', deep: '#3A2A1E' },
-    { name: 'Pale Burgundy',tint: '#EBD7D9', deep: '#4A1B24' },
-    { name: 'Pale Rust',    tint: '#EFD9C7', deep: '#6B3A1E' },
-    { name: 'Pale Teal',    tint: '#D6E8E4', deep: '#1D3F3A' },
-    { name: 'Camel',        tint: '#EAD9BE', deep: '#4A3521' },
-    { name: 'Stone Grey',   tint: '#E4E3DD', deep: '#2E3235' },
-    { name: 'Dusty Blue',   tint: '#DCE2EE', deep: '#29304F' },
-    { name: 'Warm Grey',    tint: '#E9E4DE', deep: '#37322C' },
-    { name: 'Moss',         tint: '#E1E6D3', deep: '#3A431F' },
-    { name: 'Clay',         tint: '#E9D3C4', deep: '#5A3A28' },
-    { name: 'Apricot',      tint: '#F4DEBB', deep: '#6B4A17' },
-    { name: 'Lilac',        tint: '#E9DCEF', deep: '#402C56' },
-    { name: 'Seafoam',      tint: '#D8ECE2', deep: '#1C4034' },
-    { name: 'Blush Peach',  tint: '#F3DCCF', deep: '#6E3A24' },
-    { name: 'Pale Mustard', tint: '#F5EAC3', deep: '#5C4A17' }
+  // Only two fixed text/background combinations: black-on-white and white-on-black.
+  const COMBOS = [
+    { bg: '#FFFFFF', text: '#000000', name: 'Black text / White background' },
+    { bg: '#000000', text: '#FFFFFF', name: 'White text / Black background' }
   ];
-
-  const COMBOS = [];
-  PALETTE.forEach(p => {
-    COMBOS.push({ bg: p.tint, text: p.deep, name: p.name + ' (Light)' });
-    COMBOS.push({ bg: p.deep, text: p.tint, name: p.name + ' (Dark)' });
-  });
 
   let state = {
     image: null,
@@ -273,7 +235,9 @@
     centerX: null,    // center point of the crop window, in source-image pixels
     centerY: null,
     cropW: null,
-    cropH: null
+    cropH: null,
+    redWords: new Set(), // indices (into the current word list) of words tapped red
+    wordBoxes: []         // hit-test boxes for each drawn word, rebuilt every drawCard()
   };
 
   function currentCombo() { return COMBOS[state.comboIndex]; }
@@ -282,28 +246,27 @@
     const c = currentCombo();
     swatchBg.style.background = c.bg;
     swatchText.style.background = c.text;
-    comboLabel.textContent = `${c.name} (${state.comboIndex + 1}/${COMBOS.length}) — tap to change`;
+    comboLabel.textContent = `${c.name} — tap to switch`;
   }
 
-  function wrapWords(context, text, maxWidth) {
-    const words = text.split(/\s+/).filter(Boolean);
+  function layoutLines(context, words, maxWidth) {
     const spaceWidth = context.measureText(' ').width;
     const lines = [];
     let currentLine = [];
     let currentWidth = 0;
-    words.forEach(word => {
+    words.forEach((word, idx) => {
       const w = context.measureText(word).width;
       const addWidth = currentLine.length ? spaceWidth + w : w;
       if (currentWidth + addWidth > maxWidth && currentLine.length) {
-        lines.push(currentLine.join(' '));
-        currentLine = [word];
+        lines.push(currentLine);
+        currentLine = [{ word, idx, width: w }];
         currentWidth = w;
       } else {
-        currentLine.push(word);
+        currentLine.push({ word, idx, width: w });
         currentWidth += addWidth;
       }
     });
-    if (currentLine.length) lines.push(currentLine.join(' '));
+    if (currentLine.length) lines.push(currentLine);
     return lines;
   }
 
@@ -319,18 +282,34 @@
     const paddingX = 60;
     const maxWidth = SIZE_W - paddingX * 2;
     ctx.font = `400 ${state.fontSize}px ${FONT_STACK}`;
-    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = combo.text;
 
-    const lines = wrapWords(ctx, (state.text || '').toUpperCase(), maxWidth);
+    const words = (state.text || '').toUpperCase().split(/\s+/).filter(Boolean);
+    const lines = layoutLines(ctx, words, maxWidth);
+    const spaceWidth = ctx.measureText(' ').width;
     const lineHeight = state.fontSize * 1.18;
     const totalTextHeight = lines.length * lineHeight;
     const textAreaCenterY = splitY / 2;
     let startY = textAreaCenterY - totalTextHeight / 2 + lineHeight / 2;
 
-    lines.forEach((line, i) => {
-      ctx.fillText(line, SIZE_W / 2, startY + i * lineHeight);
+    state.wordBoxes = [];
+    ctx.textAlign = 'left';
+    lines.forEach((lineWords, i) => {
+      const lineWidth = lineWords.reduce((sum, w) => sum + w.width, 0) + spaceWidth * (lineWords.length - 1);
+      let x = SIZE_W / 2 - lineWidth / 2;
+      const y = startY + i * lineHeight;
+      lineWords.forEach(w => {
+        ctx.fillStyle = state.redWords.has(w.idx) ? '#E53935' : combo.text;
+        ctx.fillText(w.word, x, y);
+        state.wordBoxes.push({
+          idx: w.idx,
+          x0: x,
+          y0: y - state.fontSize / 2,
+          x1: x + w.width,
+          y1: y + state.fontSize / 2
+        });
+        x += w.width + spaceWidth;
+      });
     });
 
     // ---- IMAGE AREA (bottom) ----
@@ -445,6 +424,26 @@
     drawCard();
   });
 
+  // ---- Tap a word in the TEXT area to toggle it red ----
+  canvas.addEventListener('click', (e) => {
+    if (!state.text) return;
+    const rect = container.getBoundingClientRect();
+    const splitYDisplay = rect.top + rect.height * state.textRatio;
+    if (e.clientY >= splitYDisplay) return; // only handle taps inside the text area (top)
+
+    const canvasX = (e.clientX - rect.left) / rect.width * SIZE_W;
+    const canvasY = (e.clientY - rect.top) / rect.height * SIZE_H;
+
+    const hit = state.wordBoxes.find(b =>
+      canvasX >= b.x0 && canvasX <= b.x1 && canvasY >= b.y0 && canvasY <= b.y1
+    );
+    if (!hit) return;
+
+    if (state.redWords.has(hit.idx)) state.redWords.delete(hit.idx);
+    else state.redWords.add(hit.idx);
+    drawCard();
+  });
+
   canvas.addEventListener('pointerup', (e) => {
     imgDragging = false;
     try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
@@ -475,7 +474,11 @@
     reader.readAsDataURL(file);
   });
 
-  factText.addEventListener('input', () => { state.text = factText.value; drawCard(); });
+  factText.addEventListener('input', () => {
+    state.text = factText.value;
+    state.redWords.clear();
+    drawCard();
+  });
   fontSizeInput.addEventListener('input', () => {
     state.fontSize = parseInt(fontSizeInput.value, 10);
     fontSizeVal.textContent = state.fontSize;
