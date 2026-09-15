@@ -249,12 +249,12 @@
     comboLabel.textContent = `${c.name} — tap to switch`;
   }
 
-  function layoutLines(context, words, maxWidth) {
+  function layoutLines(context, wordObjs, maxWidth) {
     const spaceWidth = context.measureText(' ').width;
     const lines = [];
     let currentLine = [];
     let currentWidth = 0;
-    words.forEach((word, idx) => {
+    wordObjs.forEach(({ word, idx }) => {
       const w = context.measureText(word).width;
       const addWidth = currentLine.length ? spaceWidth + w : w;
       if (currentWidth + addWidth > maxWidth && currentLine.length) {
@@ -284,8 +284,18 @@
     ctx.font = `400 ${state.fontSize}px ${FONT_STACK}`;
     ctx.textBaseline = 'middle';
 
-    const words = (state.text || '').toUpperCase().split(/\s+/).filter(Boolean);
-    const lines = layoutLines(ctx, words, maxWidth);
+    const paragraphs = (state.text || '').split(/\n/);
+    let globalIdx = 0;
+    const lines = [];
+    paragraphs.forEach(para => {
+      const paraWords = para.toUpperCase().split(/\s+/).filter(Boolean);
+      if (paraWords.length === 0) {
+        lines.push([]); // preserve an intentional blank line
+        return;
+      }
+      const wordObjs = paraWords.map(word => ({ word, idx: globalIdx++ }));
+      layoutLines(ctx, wordObjs, maxWidth).forEach(l => lines.push(l));
+    });
     const spaceWidth = ctx.measureText(' ').width;
     const lineHeight = state.fontSize * 1.18;
     const totalTextHeight = lines.length * lineHeight;
