@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>Relationship Cues — Card Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #121212;
+    font-family: 'Poppins', -apple-system, Roboto, 'Segoe UI', sans-serif;
+    color: #fff;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  .wrap {
+    display: flex;
+    flex-direction: column;
+    max-width: 480px;
+    height: 100dvh;
+    margin: 0 auto;
+    padding: 12px;
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+  h1 {
+    font-size: 15px;
+    text-align: center;
+    margin: 0 0 8px;
+    font-weight: 600;
+    color: #eee;
+    letter-spacing: 0.5px;
+    flex: 0 0 auto;
+  }
+  .canvas-container {
+    position: relative;
+    flex: 0 0 auto;
+    width: auto;
+    height: 42vh;
+    max-height: 380px;
+    max-width: 100%;
+    aspect-ratio: 4 / 5;
+    margin: 0 auto;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    touch-action: none;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  }
+  canvas#card {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .placeholder-btn {
+    position: absolute;
+    left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #888;
+    font-size: 14px;
+    pointer-events: none;
+    text-align: center;
+    padding: 0 20px;
+  }
+  .divider {
+    position: absolute;
+    left: 0; right: 0;
+    height: 32px;
+    margin-top: -16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: ns-resize;
+    z-index: 5;
+  }
+  .divider .bar {
+    width: 50px;
+    height: 6px;
+    background: #4CAF50;
+    border-radius: 3px;
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.35);
+  }
+  .hint {
+    font-size: 12px;
+    color: #777;
+    text-align: center;
+    margin-top: 6px;
+    flex: 0 0 auto;
+  }
+  .controls {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 24px;
+  }
+  .row { display: flex; gap: 10px; }
+  button {
+    flex: 1;
+    background: #2b2b2b;
+    color: #fff;
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    padding: 13px 10px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  button:active { background: #3a3a3a; }
+  button.primary { background: #4CAF50; border-color: #4CAF50; }
+  button.primary:active { background: #43a047; }
+  button.colorBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  .swatchPair {
+    display: flex;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.35);
+    flex: 0 0 auto;
+  }
+  .swatchPair span { flex: 1; height: 100%; }
+  textarea {
+    width: 100%;
+    background: #1c1c1c;
+    color: #fff;
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 15px;
+    font-family: 'Poppins', sans-serif;
+    text-transform: uppercase;
+    resize: none;
+    min-height: 70px;
+  }
+  label.small {
+    font-size: 13px;
+    color: #aaa;
+    display: flex;
+    justify-content: space-between;
+  }
+  input[type=range] { width: 100%; }
+  #fileInput { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Relationship Cues — Card Maker</h1>
+
+  <div class="canvas-container" id="canvasContainer">
+    <canvas id="card" width="1080" height="1350"></canvas>
+    <div class="placeholder-btn" id="placeholderHint">Select an image below</div>
+    <div class="divider" id="divider"><div class="bar"></div></div>
+  </div>
+  <div class="hint">📌 Drag the image to reposition · use "Zoom" to crop tighter</div>
+
+  <div class="controls">
+    <div class="row">
+      <button id="pickImageBtn">📷 Select Image</button>
+      <button id="saveBtn" class="primary">💾 Save Post</button>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" />
+
+    <textarea id="factText" placeholder="Type your text here..."></textarea>
+
+    <button id="colorCycleBtn" class="colorBtn">
+      <span class="swatchPair" id="swatchPreview"><span id="swatchBg"></span><span id="swatchText"></span></span>
+      <span id="comboLabel">Combo 1 / 9 — tap to change</span>
+    </button>
+
+    <label class="small">Font Size <span id="fontSizeVal">56</span>px
+      <input type="range" id="fontSize" min="28" max="150" value="56" />
+    </label>
+
+    <label class="small">Image Zoom / Crop <span id="zoomVal">100</span>%
+      <input type="range" id="zoom" min="100" max="300" value="100" />
+    </label>
+
+    <div class="hint">Saved image goes to your "Downloads" folder</div>
+  </div>
+</div>
+
+<script>
+  const canvas = document.getElementById('card');
+  const ctx = canvas.getContext('2d');
+  const container = document.getElementById('canvasContainer');
+  const divider = document.getElementById('divider');
+  const placeholderHint = document.getElementById('placeholderHint');
+  const factText = document.getElementById('factText');
+  const fontSizeInput = document.getElementById('fontSize');
+  const fontSizeVal = document.getElementById('fontSizeVal');
+  const zoomInput = document.getElementById('zoom');
+  const zoomVal = document.getElementById('zoomVal');
+  const fileInput = document.getElementById('fileInput');
+  const colorCycleBtn = document.getElementById('colorCycleBtn');
+  const swatchBg = document.getElementById('swatchBg');
+  const swatchText = document.getElementById('swatchText');
+  const comboLabel = document.getElementById('comboLabel');
+
+  // Canvas is 4:5 (width:height) — TEXT area on TOP, IMAGE area on BOTTOM
+  const SIZE_W = 1080;
+  const SIZE_H = 1350;
+  const FONT_STACK = '"Anton", "Poppins", Arial, sans-serif';
+  const WATERMARK_TEXT = 'RELATIONSHIP CUES';
+
+  // 33 curated, minimalist Pinterest-style hue pairs — each expands into
+  // a light-bg and a dark-bg combo below, giving 66 total combinations.
+  const PALETTE = [
+    { name: 'Ivory',        tint: '#F7F3EC', deep: '#2B2620' },
+    { name: 'Pure',         tint: '#FAFAFA', deep: '#111111' },
+    { name: 'Sage',         tint: '#E4EADF', deep: '#2F4538' },
+    { name: 'Blush',        tint: '#F5DEDC', deep: '#5C2A2A' },
+    { name: 'Powder Blue',  tint: '#DCE8F3', deep: '#1F3A5F' },
+    { name: 'Lavender',     tint: '#E7DEF2', deep: '#3B2A52' },
+    { name: 'Butter',       tint: '#F6EBC8', deep: '#4A3E1E' },
+    { name: 'Terracotta',   tint: '#EAC9B9', deep: '#4A2E23' },
+    { name: 'Mint',         tint: '#DCEFE6', deep: '#1E4B3D' },
+    { name: 'Peach',        tint: '#F5DFC9', deep: '#7A3B1E' },
+    { name: 'Dusty Rose',   tint: '#EAD2D2', deep: '#5A2E36' },
+    { name: 'Steel Blue',   tint: '#D9E2EA', deep: '#253746' },
+    { name: 'Khaki',        tint: '#E9E4C9', deep: '#4B4A2A' },
+    { name: 'Mauve',        tint: '#E6D7DE', deep: '#4B2C3D' },
+    { name: 'Sand',         tint: '#EDE3D3', deep: '#4A3A2C' },
+    { name: 'Coral',        tint: '#F6DCD3', deep: '#6E3327' },
+    { name: 'Cool Grey',    tint: '#E7E7E7', deep: '#2A2A2A' },
+    { name: 'Taupe',        tint: '#E5DED4', deep: '#3E362B' },
+    { name: 'Warm Ivory',   tint: '#F1E9DD', deep: '#3A2A1E' },
+    { name: 'Pale Burgundy',tint: '#EBD7D9', deep: '#4A1B24' },
+    { name: 'Pale Rust',    tint: '#EFD9C7', deep: '#6B3A1E' },
+    { name: 'Pale Teal',    tint: '#D6E8E4', deep: '#1D3F3A' },
+    { name: 'Camel',        tint: '#EAD9BE', deep: '#4A3521' },
+    { name: 'Stone Grey',   tint: '#E4E3DD', deep: '#2E3235' },
+    { name: 'Dusty Blue',   tint: '#DCE2EE', deep: '#29304F' },
+    { name: 'Warm Grey',    tint: '#E9E4DE', deep: '#37322C' },
+    { name: 'Moss',         tint: '#E1E6D3', deep: '#3A431F' },
+    { name: 'Clay',         tint: '#E9D3C4', deep: '#5A3A28' },
+    { name: 'Apricot',      tint: '#F4DEBB', deep: '#6B4A17' },
+    { name: 'Lilac',        tint: '#E9DCEF', deep: '#402C56' },
+    { name: 'Seafoam',      tint: '#D8ECE2', deep: '#1C4034' },
+    { name: 'Blush Peach',  tint: '#F3DCCF', deep: '#6E3A24' },
+    { name: 'Pale Mustard', tint: '#F5EAC3', deep: '#5C4A17' }
+  ];
+
+  const COMBOS = [];
+  PALETTE.forEach(p => {
+    COMBOS.push({ bg: p.tint, text: p.deep, name: p.name + ' (Light)' });
+    COMBOS.push({ bg: p.deep, text: p.tint, name: p.name + ' (Dark)' });
+  });
+
+  let state = {
+    image: null,
+    textRatio: 0.32,   // fraction of height given to the TEXT area (top)
+    fontSize: 56,
+    comboIndex: 0,
+    text: factText.value,
+    zoom: 1,          // 1 = fully fit, higher = zoomed in / more cropped
+    centerX: null,    // center point of the crop window, in source-image pixels
+    centerY: null,
+    cropW: null,
+    cropH: null
+  };
+
+  function currentCombo() { return COMBOS[state.comboIndex]; }
+
+  function updateSwatchUI() {
+    const c = currentCombo();
+    swatchBg.style.background = c.bg;
+    swatchText.style.background = c.text;
+    comboLabel.textContent = `${c.name} (${state.comboIndex + 1}/${COMBOS.length}) — tap to change`;
+  }
+
+  function wrapWords(context, text, maxWidth) {
+    const words = text.split(/\s+/).filter(Boolean);
+    const spaceWidth = context.measureText(' ').width;
+    const lines = [];
+    let currentLine = [];
+    let currentWidth = 0;
+    words.forEach(word => {
+      const w = context.measureText(word).width;
+      const addWidth = currentLine.length ? spaceWidth + w : w;
+      if (currentWidth + addWidth > maxWidth && currentLine.length) {
+        lines.push(currentLine.join(' '));
+        currentLine = [word];
+        currentWidth = w;
+      } else {
+        currentLine.push(word);
+        currentWidth += addWidth;
+      }
+    });
+    if (currentLine.length) lines.push(currentLine.join(' '));
+    return lines;
+  }
+
+  function drawCard() {
+    ctx.clearRect(0, 0, SIZE_W, SIZE_H);
+    const combo = currentCombo();
+    const splitY = Math.round(SIZE_H * state.textRatio);
+
+    // ---- TEXT AREA (top) ----
+    ctx.fillStyle = combo.bg;
+    ctx.fillRect(0, 0, SIZE_W, splitY);
+
+    const paddingX = 60;
+    const maxWidth = SIZE_W - paddingX * 2;
+    ctx.font = `400 ${state.fontSize}px ${FONT_STACK}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = combo.text;
+
+    const lines = wrapWords(ctx, (state.text || '').toUpperCase(), maxWidth);
+    const lineHeight = state.fontSize * 1.18;
+    const totalTextHeight = lines.length * lineHeight;
+    const textAreaCenterY = splitY / 2;
+    let startY = textAreaCenterY - totalTextHeight / 2 + lineHeight / 2;
+
+    lines.forEach((line, i) => {
+      ctx.fillText(line, SIZE_W / 2, startY + i * lineHeight);
+    });
+
+    // ---- IMAGE AREA (bottom) ----
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, splitY, SIZE_W, SIZE_H - splitY);
+
+    if (state.image) {
+      const img = state.image;
+      const targetW = SIZE_W, targetH = SIZE_H - splitY;
+      const targetRatio = targetW / targetH;
+      const imgRatio = img.width / img.height;
+
+      let baseW, baseH;
+      if (imgRatio > targetRatio) { baseH = img.height; baseW = baseH * targetRatio; }
+      else { baseW = img.width; baseH = baseW / targetRatio; }
+
+      const cropW = baseW / state.zoom;
+      const cropH = baseH / state.zoom;
+
+      state.centerX = Math.max(cropW / 2, Math.min(state.centerX, img.width - cropW / 2));
+      state.centerY = Math.max(cropH / 2, Math.min(state.centerY, img.height - cropH / 2));
+
+      const cropX = state.centerX - cropW / 2;
+      const cropY = state.centerY - cropH / 2;
+
+      state.cropW = cropW;
+      state.cropH = cropH;
+
+      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, splitY, targetW, targetH);
+    }
+
+    // ---- WATERMARK (bottom of image area) — subtle scrim + thin rule + refined label ----
+    ctx.save();
+    const scrimH = 130;
+    const scrimGrad = ctx.createLinearGradient(0, SIZE_H - scrimH, 0, SIZE_H);
+    scrimGrad.addColorStop(0, 'rgba(0,0,0,0)');
+    scrimGrad.addColorStop(1, 'rgba(0,0,0,0.38)');
+    ctx.fillStyle = scrimGrad;
+    ctx.fillRect(0, SIZE_H - scrimH, SIZE_W, scrimH);
+
+    // thin center rule above the wordmark
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(SIZE_W / 2 - 22, SIZE_H - 46);
+    ctx.lineTo(SIZE_W / 2 + 22, SIZE_H - 46);
+    ctx.stroke();
+
+    ctx.font = `600 20px "Poppins", Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.letterSpacing = '5px';
+    ctx.fillText(WATERMARK_TEXT, SIZE_W / 2 + 2, SIZE_H - 26);
+    ctx.restore();
+
+    const displayRatio = container.clientHeight / SIZE_H;
+    divider.style.top = (splitY * displayRatio) + 'px';
+    placeholderHint.style.top = (splitY * displayRatio) + 'px';
+    placeholderHint.style.height = ((SIZE_H - splitY) * displayRatio) + 'px';
+    placeholderHint.style.display = state.image ? 'none' : 'flex';
+  }
+
+  let dragging = false;
+  function ratioFromClientY(clientY) {
+    const rect = container.getBoundingClientRect();
+    let ratio = (clientY - rect.top) / rect.height;
+    return Math.max(0.15, Math.min(0.6, ratio));
+  }
+  divider.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    divider.setPointerCapture(e.pointerId);
+  });
+  divider.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    state.textRatio = ratioFromClientY(e.clientY);
+    drawCard();
+  });
+  divider.addEventListener('pointerup', () => { dragging = false; });
+  divider.addEventListener('pointercancel', () => { dragging = false; });
+
+  // ---- Move/reposition the image by dragging it (image area is now the BOTTOM part) ----
+  let imgDragging = false;
+  let lastX = 0, lastY = 0;
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!state.image) return;
+    const rect = container.getBoundingClientRect();
+    const splitYDisplay = rect.top + rect.height * state.textRatio;
+    if (e.clientY < splitYDisplay) return; // only drag within the image area (bottom), not the text area
+    imgDragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    canvas.setPointerCapture(e.pointerId);
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (!imgDragging || !state.image) return;
+    const rect = container.getBoundingClientRect();
+    const dxDisplay = e.clientX - lastX;
+    const dyDisplay = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+
+    const displayImageHeight = rect.height * (1 - state.textRatio);
+    const scaleFactorX = state.cropW / rect.width;
+    const scaleFactorY = state.cropH / displayImageHeight;
+
+    state.centerX -= dxDisplay * scaleFactorX;
+    state.centerY -= dyDisplay * scaleFactorY;
+
+    drawCard();
+  });
+
+  canvas.addEventListener('pointerup', (e) => {
+    imgDragging = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+  });
+  canvas.addEventListener('pointercancel', () => { imgDragging = false; });
+
+  document.getElementById('pickImageBtn').addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        state.image = img;
+        state.zoom = 1;
+        state.centerX = img.width / 2;
+        state.centerY = img.height / 2;
+        zoomInput.value = 100;
+        zoomVal.textContent = 100;
+        drawCard();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  factText.addEventListener('input', () => { state.text = factText.value; drawCard(); });
+  fontSizeInput.addEventListener('input', () => {
+    state.fontSize = parseInt(fontSizeInput.value, 10);
+    fontSizeVal.textContent = state.fontSize;
+    drawCard();
+  });
+  zoomInput.addEventListener('input', () => {
+    state.zoom = parseInt(zoomInput.value, 10) / 100;
+    zoomVal.textContent = zoomInput.value;
+    drawCard();
+  });
+
+  colorCycleBtn.addEventListener('click', () => {
+    state.comboIndex = (state.comboIndex + 1) % COMBOS.length;
+    updateSwatchUI();
+    drawCard();
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'RelationshipCues_' + Date.now() + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, 'image/png');
+  });
+
+  window.addEventListener('resize', drawCard);
+  window.addEventListener('load', drawCard);
+  updateSwatchUI();
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(drawCard);
+  }
+  drawCard();
+</script>
+</body>
+</html>
