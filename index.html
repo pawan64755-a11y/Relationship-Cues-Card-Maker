@@ -96,33 +96,6 @@
     margin-top: 6px;
     flex: 0 0 auto;
   }
-  .dots {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    flex: 0 0 auto;
-  }
-  .dots .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #444;
-    border: none;
-    padding: 0;
-    flex: none;
-  }
-  .dots .dot.active {
-    background: #4CAF50;
-    width: 20px;
-    border-radius: 4px;
-  }
-  .dots .dotLabel {
-    font-size: 12px;
-    color: #999;
-    margin: 0 4px;
-  }
   .controls {
     margin-top: 12px;
     display: flex;
@@ -147,22 +120,6 @@
   button:active { background: #3a3a3a; }
   button.primary { background: #4CAF50; border-color: #4CAF50; }
   button.primary:active { background: #43a047; }
-  button.colorBtn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-  }
-  .swatchPair {
-    display: flex;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.35);
-    flex: 0 0 auto;
-  }
-  .swatchPair span { flex: 1; height: 100%; }
   textarea {
     width: 100%;
     background: #1c1c1c;
@@ -195,11 +152,7 @@
     <div class="placeholder-btn" id="placeholderHint">Select an image below</div>
     <div class="divider" id="divider"><div class="bar"></div></div>
   </div>
-  <div class="dots" id="previewDots">
-    <button class="dot active" data-idx="0" aria-label="Preview 1"></button>
-    <button class="dot" data-idx="1" aria-label="Preview 2"></button>
-    <span class="dotLabel" id="previewLabel">Relationship Cues</span>
-  </div>
+  <div class="hint">📌 Drag the image to reposition · use "Zoom" to crop tighter · tap a word in the text to turn it red</div>
 
   <div class="controls">
     <div class="row">
@@ -239,12 +192,10 @@
   const SIZE_W = 1080;
   const SIZE_H = 1350;
   const FONT_STACK = '"Anton", "Poppins", Arial, sans-serif';
-  const WATERMARKS = ['RELATIONSHIP CUES', 'LINK IN COMMENTS'];
-  const WATERMARK_LABELS = ['Relationship Cues', 'Link in Comments'];
+  const WATERMARK_TEXT = 'RELATIONSHIP CUES';
 
   // Fixed text/background combination: black text on white background.
-  const CARD_BG = '#FFFFFF';
-  const CARD_TEXT = '#000000';
+  const FIXED_COMBO = { bg: '#FFFFFF', text: '#000000', name: 'Black text / White background' };
 
   let state = {
     image: null,
@@ -257,27 +208,10 @@
     cropW: null,
     cropH: null,
     redWords: new Set(), // indices (into the current word list) of words tapped red
-    wordBoxes: [],        // hit-test boxes for each drawn word, rebuilt every drawCard()
-    previewIndex: 0       // which watermark variant is currently shown in the live preview (0 or 1)
+    wordBoxes: []         // hit-test boxes for each drawn word, rebuilt every drawCard()
   };
 
-  const previewDots = document.getElementById('previewDots');
-  const previewLabel = document.getElementById('previewLabel');
-
-  function updatePreviewUI() {
-    previewDots.querySelectorAll('.dot').forEach(d => {
-      d.classList.toggle('active', parseInt(d.dataset.idx, 10) === state.previewIndex);
-    });
-    previewLabel.textContent = WATERMARK_LABELS[state.previewIndex];
-  }
-
-  previewDots.querySelectorAll('.dot').forEach(d => {
-    d.addEventListener('click', () => {
-      state.previewIndex = parseInt(d.dataset.idx, 10);
-      updatePreviewUI();
-      drawCard();
-    });
-  });
+  function currentCombo() { return FIXED_COMBO; }
 
   function layoutLines(context, wordObjs, maxWidth) {
     const spaceWidth = context.measureText(' ').width;
@@ -300,13 +234,13 @@
     return lines;
   }
 
-  function renderCard(targetCtx, watermarkText, isMainCanvas) {
-    targetCtx.clearRect(0, 0, SIZE_W, SIZE_H);
+  function drawCard() {
+    ctx.clearRect(0, 0, SIZE_W, SIZE_H);
+    const combo = currentCombo();
     const splitY = Math.round(SIZE_H * state.textRatio);
-    const ctx = targetCtx;
 
     // ---- TEXT AREA (top) ----
-    ctx.fillStyle = CARD_BG;
+    ctx.fillStyle = combo.bg;
     ctx.fillRect(0, 0, SIZE_W, splitY);
 
     const paddingX = 60;
@@ -332,24 +266,22 @@
     const textAreaCenterY = splitY / 2;
     let startY = textAreaCenterY - totalTextHeight / 2 + lineHeight / 2;
 
-    if (isMainCanvas) state.wordBoxes = [];
+    state.wordBoxes = [];
     ctx.textAlign = 'left';
     lines.forEach((lineWords, i) => {
       const lineWidth = lineWords.reduce((sum, w) => sum + w.width, 0) + spaceWidth * (lineWords.length - 1);
       let x = SIZE_W / 2 - lineWidth / 2;
       const y = startY + i * lineHeight;
       lineWords.forEach(w => {
-        ctx.fillStyle = state.redWords.has(w.idx) ? '#E53935' : CARD_TEXT;
+        ctx.fillStyle = state.redWords.has(w.idx) ? '#E53935' : combo.text;
         ctx.fillText(w.word, x, y);
-        if (isMainCanvas) {
-          state.wordBoxes.push({
-            idx: w.idx,
-            x0: x,
-            y0: y - state.fontSize / 2,
-            x1: x + w.width,
-            y1: y + state.fontSize / 2
-          });
-        }
+        state.wordBoxes.push({
+          idx: w.idx,
+          x0: x,
+          y0: y - state.fontSize / 2,
+          x1: x + w.width,
+          y1: y + state.fontSize / 2
+        });
         x += w.width + spaceWidth;
       });
     });
@@ -405,16 +337,8 @@
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
     ctx.letterSpacing = '5px';
-    ctx.fillText(watermarkText, SIZE_W / 2 + 2, SIZE_H - 26);
+    ctx.fillText(WATERMARK_TEXT, SIZE_W / 2 + 2, SIZE_H - 26);
     ctx.restore();
-  }
-
-  // Draws the live, on-screen canvas using whichever watermark variant is
-  // currently selected for preview (state.previewIndex), and updates the
-  // divider/placeholder UI which only makes sense for the visible canvas.
-  function drawCard() {
-    const splitY = Math.round(SIZE_H * state.textRatio);
-    renderCard(ctx, WATERMARKS[state.previewIndex], true);
 
     const displayRatio = container.clientHeight / SIZE_H;
     divider.style.top = (splitY * displayRatio) + 'px';
@@ -442,15 +366,8 @@
   divider.addEventListener('pointercancel', () => { dragging = false; });
 
   // ---- Move/reposition the image by dragging it (image area is now the BOTTOM part) ----
-  // A mostly-horizontal, fairly wide drag is treated as a "swipe" that switches
-  // the watermark preview (RELATIONSHIP CUES <-> LINK IN COMMENTS) instead of
-  // moving the image; any other drag repositions the image as before.
   let imgDragging = false;
   let lastX = 0, lastY = 0;
-  let gestureStartX = 0, gestureStartY = 0;
-  let gestureStartCenterX = 0, gestureStartCenterY = 0;
-  const SWIPE_MIN_DIST = 55;
-  const SWIPE_RATIO = 1.8; // horizontal movement must dominate vertical by this much
 
   canvas.addEventListener('pointerdown', (e) => {
     if (!state.image) return;
@@ -460,10 +377,6 @@
     imgDragging = true;
     lastX = e.clientX;
     lastY = e.clientY;
-    gestureStartX = e.clientX;
-    gestureStartY = e.clientY;
-    gestureStartCenterX = state.centerX;
-    gestureStartCenterY = state.centerY;
     canvas.setPointerCapture(e.pointerId);
   });
 
@@ -506,21 +419,7 @@
   });
 
   canvas.addEventListener('pointerup', (e) => {
-    if (imgDragging && state.image) {
-      const totalDX = e.clientX - gestureStartX;
-      const totalDY = e.clientY - gestureStartY;
-      if (Math.abs(totalDX) >= SWIPE_MIN_DIST && Math.abs(totalDX) >= Math.abs(totalDY) * SWIPE_RATIO) {
-        // it was a swipe, not a reposition drag: undo any image shift and flip the preview
-        state.centerX = gestureStartCenterX;
-        state.centerY = gestureStartCenterY;
-        state.previewIndex = totalDX < 0
-          ? Math.min(1, state.previewIndex + 1)
-          : Math.max(0, state.previewIndex - 1);
-        updatePreviewUI();
-      }
-    }
     imgDragging = false;
-    drawCard();
     try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
   });
   canvas.addEventListener('pointercancel', () => { imgDragging = false; });
@@ -565,44 +464,21 @@
     drawCard();
   });
 
-  function downloadBlob(blob, filename) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-  }
-
-  function exportVariant(watermarkText) {
-    return new Promise((resolve) => {
-      const offCanvas = document.createElement('canvas');
-      offCanvas.width = SIZE_W;
-      offCanvas.height = SIZE_H;
-      const offCtx = offCanvas.getContext('2d');
-      renderCard(offCtx, watermarkText, false); // false = don't touch the visible canvas's hit-test boxes
-      offCanvas.toBlob((blob) => resolve(blob), 'image/png');
-    });
-  }
-
-  document.getElementById('saveBtn').addEventListener('click', async () => {
-    const ts = Date.now();
-    const fileNames = ['RelationshipCues_' + ts + '.png', 'LinkInComments_' + ts + '.png'];
-    for (let i = 0; i < WATERMARKS.length; i++) {
-      const blob = await exportVariant(WATERMARKS[i]);
-      downloadBlob(blob, fileNames[i]);
-      // small delay between downloads so browsers don't drop/merge the second one
-      if (i < WATERMARKS.length - 1) await new Promise(r => setTimeout(r, 350));
-    }
-    // restore the visible canvas exactly as the user had it (hit-test boxes etc.)
-    drawCard();
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'RelationshipCues_' + Date.now() + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, 'image/png');
   });
 
   window.addEventListener('resize', drawCard);
   window.addEventListener('load', drawCard);
-  updatePreviewUI();
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(drawCard);
   }
