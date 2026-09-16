@@ -195,8 +195,6 @@
     <div class="placeholder-btn" id="placeholderHint">Select an image below</div>
     <div class="divider" id="divider"><div class="bar"></div></div>
   </div>
-  <div class="hint">📌 Drag the image to reposition · use "Zoom" to crop tighter · tap a word in the text to turn it red</div>
-  <div class="hint" id="previewHint">👉 Swipe the image left/right to preview the "LINK IN COMMENTS" version</div>
   <div class="dots" id="previewDots">
     <button class="dot active" data-idx="0" aria-label="Preview 1"></button>
     <button class="dot" data-idx="1" aria-label="Preview 2"></button>
@@ -211,11 +209,6 @@
     <input type="file" id="fileInput" accept="image/*" />
 
     <textarea id="factText" placeholder="Type your text here..."></textarea>
-
-    <button id="colorCycleBtn" class="colorBtn">
-      <span class="swatchPair" id="swatchPreview"><span id="swatchBg"></span><span id="swatchText"></span></span>
-      <span id="comboLabel">Black text / White background — tap to switch</span>
-    </button>
 
     <label class="small">Font Size <span id="fontSizeVal">56</span>px
       <input type="range" id="fontSize" min="28" max="150" value="56" />
@@ -241,10 +234,6 @@
   const zoomInput = document.getElementById('zoom');
   const zoomVal = document.getElementById('zoomVal');
   const fileInput = document.getElementById('fileInput');
-  const colorCycleBtn = document.getElementById('colorCycleBtn');
-  const swatchBg = document.getElementById('swatchBg');
-  const swatchText = document.getElementById('swatchText');
-  const comboLabel = document.getElementById('comboLabel');
 
   // Canvas is 4:5 (width:height) — TEXT area on TOP, IMAGE area on BOTTOM
   const SIZE_W = 1080;
@@ -253,17 +242,14 @@
   const WATERMARKS = ['RELATIONSHIP CUES', 'LINK IN COMMENTS'];
   const WATERMARK_LABELS = ['Relationship Cues', 'Link in Comments'];
 
-  // Only two fixed text/background combinations: black-on-white and white-on-black.
-  const COMBOS = [
-    { bg: '#FFFFFF', text: '#000000', name: 'Black text / White background' },
-    { bg: '#000000', text: '#FFFFFF', name: 'White text / Black background' }
-  ];
+  // Fixed text/background combination: black text on white background.
+  const CARD_BG = '#FFFFFF';
+  const CARD_TEXT = '#000000';
 
   let state = {
     image: null,
     textRatio: 0.32,   // fraction of height given to the TEXT area (top)
     fontSize: 56,
-    comboIndex: 0,
     text: factText.value,
     zoom: 1,          // 1 = fully fit, higher = zoomed in / more cropped
     centerX: null,    // center point of the crop window, in source-image pixels
@@ -293,15 +279,6 @@
     });
   });
 
-  function currentCombo() { return COMBOS[state.comboIndex]; }
-
-  function updateSwatchUI() {
-    const c = currentCombo();
-    swatchBg.style.background = c.bg;
-    swatchText.style.background = c.text;
-    comboLabel.textContent = `${c.name} — tap to switch`;
-  }
-
   function layoutLines(context, wordObjs, maxWidth) {
     const spaceWidth = context.measureText(' ').width;
     const lines = [];
@@ -325,12 +302,11 @@
 
   function renderCard(targetCtx, watermarkText, isMainCanvas) {
     targetCtx.clearRect(0, 0, SIZE_W, SIZE_H);
-    const combo = currentCombo();
     const splitY = Math.round(SIZE_H * state.textRatio);
     const ctx = targetCtx;
 
     // ---- TEXT AREA (top) ----
-    ctx.fillStyle = combo.bg;
+    ctx.fillStyle = CARD_BG;
     ctx.fillRect(0, 0, SIZE_W, splitY);
 
     const paddingX = 60;
@@ -363,7 +339,7 @@
       let x = SIZE_W / 2 - lineWidth / 2;
       const y = startY + i * lineHeight;
       lineWords.forEach(w => {
-        ctx.fillStyle = state.redWords.has(w.idx) ? '#E53935' : combo.text;
+        ctx.fillStyle = state.redWords.has(w.idx) ? '#E53935' : CARD_TEXT;
         ctx.fillText(w.word, x, y);
         if (isMainCanvas) {
           state.wordBoxes.push({
@@ -589,12 +565,6 @@
     drawCard();
   });
 
-  colorCycleBtn.addEventListener('click', () => {
-    state.comboIndex = (state.comboIndex + 1) % COMBOS.length;
-    updateSwatchUI();
-    drawCard();
-  });
-
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -632,7 +602,6 @@
 
   window.addEventListener('resize', drawCard);
   window.addEventListener('load', drawCard);
-  updateSwatchUI();
   updatePreviewUI();
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(drawCard);
