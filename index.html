@@ -141,6 +141,70 @@
   }
   input[type=range] { width: 100%; }
   #fileInput { display: none; }
+
+  .swatchRow {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    padding: 0;
+    flex: 0 0 auto;
+    position: relative;
+    box-shadow: 0 0 0 1px #3a3a3a;
+  }
+  .swatch.selected {
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 1px #4CAF50;
+  }
+  .toggleRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #1c1c1c;
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #eee;
+  }
+  .toggleRow input[type=checkbox] {
+    width: 20px;
+    height: 20px;
+    accent-color: #4CAF50;
+  }
+  button:disabled {
+    opacity: 0.4;
+  }
+  .colorPickBtn {
+    flex: 1;
+    background: #2b2b2b;
+    color: #fff;
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    padding: 13px 10px;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .colorPickBtn input[type=color] {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 6px;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -152,14 +216,29 @@
     <div class="placeholder-btn" id="placeholderHint">Select an image below</div>
     <div class="divider" id="divider"><div class="bar"></div></div>
   </div>
-  <div class="hint">📌 Drag the image to reposition · use "Zoom" to crop tighter · tap a word in the text to turn it red</div>
+  <div class="hint">📌 Drag the image to reposition · use "Zoom" to crop tighter · tap a word in the text to highlight it</div>
 
   <div class="controls">
+    <div class="toggleRow">
+      <span>🔤 Full Text Card (no image)</span>
+      <input type="checkbox" id="fullTextToggle" />
+    </div>
+
     <div class="row">
       <button id="pickImageBtn">📷 Select Image</button>
       <button id="saveBtn" class="primary">💾 Save Post</button>
     </div>
     <input type="file" id="fileInput" accept="image/*" />
+
+    <label class="small">Colour Style</label>
+    <div class="swatchRow" id="swatchRow"></div>
+
+    <div class="row" id="fullTextExtras" style="display:none;">
+      <button id="randomGradientBtn">🎨 Random Gradient</button>
+      <label class="colorPickBtn" for="bgColorPicker">🖌️ Pick Colour
+        <input type="color" id="bgColorPicker" value="#4CAF50" />
+      </label>
+    </div>
 
     <textarea id="factText" placeholder="Type your text here..."></textarea>
 
@@ -187,6 +266,12 @@
   const zoomInput = document.getElementById('zoom');
   const zoomVal = document.getElementById('zoomVal');
   const fileInput = document.getElementById('fileInput');
+  const fullTextToggle = document.getElementById('fullTextToggle');
+  const pickImageBtn = document.getElementById('pickImageBtn');
+  const swatchRow = document.getElementById('swatchRow');
+  const fullTextExtras = document.getElementById('fullTextExtras');
+  const randomGradientBtn = document.getElementById('randomGradientBtn');
+  const bgColorPicker = document.getElementById('bgColorPicker');
 
   // Canvas is 4:5 (width:height) — TEXT area on TOP, IMAGE area on BOTTOM
   const SIZE_W = 1080;
@@ -194,11 +279,30 @@
   const FONT_STACK = '"Anton", "Poppins", Arial, sans-serif';
   const WATERMARK_TEXT = 'RELATIONSHIP CUES';
 
-  // Fixed text/background combination: black text on white background.
-  const FIXED_COMBO = { bg: '#FFFFFF', text: '#000000', name: 'Black text / White background' };
+  // Selectable text/background colour combinations. `highlight` is the colour
+  // a tapped word turns — chosen per combo so it still stands out.
+  const COMBOS = [
+    { bg: '#FFFFFF', text: '#000000', highlight: '#E53935', name: 'White' },
+    { bg: '#000000', text: '#FFFFFF', highlight: '#FFD54F', name: 'Black' },
+    { bg: '#F5D400', text: '#000000', highlight: '#D32F2F', name: 'Yellow' },
+    { bg: '#D32F2F', text: '#FFFFFF', highlight: '#FFEB3B', name: 'Red' },
+    { bg: '#1B5E20', text: '#FFFFFF', highlight: '#FFD54F', name: 'Green' },
+    { bg: '#0D1B4C', text: '#FFFFFF', highlight: '#FFD54F', name: 'Navy' },
+    { bg: '#F8BBD0', text: '#000000', highlight: '#AD1457', name: 'Pink' },
+    { bg: '#4A148C', text: '#FFFFFF', highlight: '#FFEB3B', name: 'Purple' },
+    { bg: '#FB8C00', text: '#000000', highlight: '#FFFFFF', name: 'Orange' },
+    { bg: '#00695C', text: '#FFFFFF', highlight: '#FFD54F', name: 'Teal' },
+    { bg: '#5D1049', text: '#FFFFFF', highlight: '#FFD54F', name: 'Maroon' },
+    { bg: '#C8E6C9', text: '#000000', highlight: '#2E7D32', name: 'Mint' },
+    { bg: '#81D4FA', text: '#000000', highlight: '#0D47A1', name: 'Sky Blue' },
+    { bg: '#2C2C2C', text: '#FFFFFF', highlight: '#FF7043', name: 'Charcoal' },
+  ];
 
   let state = {
     image: null,
+    fullText: false, // when true, no image is needed and text fills the whole card
+    comboIndex: 0,    // which COMBOS entry is active
+    customBg: null,   // { bgColors: [hex] or [hex,hex], text, highlight } — Full Text mode only
     textRatio: 0.32,   // fraction of height given to the TEXT area (top)
     fontSize: 56,
     text: factText.value,
@@ -207,11 +311,90 @@
     centerY: null,
     cropW: null,
     cropH: null,
-    redWords: new Set(), // indices (into the current word list) of words tapped red
+    redWords: new Set(), // indices (into the current word list) of words tapped to highlight
     wordBoxes: []         // hit-test boxes for each drawn word, rebuilt every drawCard()
   };
 
-  function currentCombo() { return FIXED_COMBO; }
+  // Returns { bgColors: [hex] or [hex,hex], text, highlight }. In Full Text
+  // mode a custom (gradient or manually picked) background takes priority.
+  function currentCombo() {
+    if (state.fullText && state.customBg) return state.customBg;
+    const preset = COMBOS[state.comboIndex];
+    return { bgColors: [preset.bg], text: preset.text, highlight: preset.highlight };
+  }
+
+  function luminance(hex) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0, 2), 16);
+    const g = parseInt(c.substring(2, 4), 16);
+    const b = parseInt(c.substring(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+  function isLightColor(hex) { return luminance(hex) > 0.6; }
+  function avgIsLight(colors) {
+    return (colors.reduce((s, c) => s + luminance(c), 0) / colors.length) > 0.6;
+  }
+
+  function hexToRgba(hex, alpha) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0, 2), 16);
+    const g = parseInt(c.substring(2, 4), 16);
+    const b = parseInt(c.substring(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  // Builds a solid or (2-colour) gradient fillStyle from a bgColors array.
+  function bgFillStyle(colors, alpha) {
+    if (alpha === undefined) alpha = 1;
+    if (colors.length === 1) return hexToRgba(colors[0], alpha);
+    const grad = ctx.createLinearGradient(0, 0, SIZE_W, SIZE_H);
+    grad.addColorStop(0, hexToRgba(colors[0], alpha));
+    grad.addColorStop(1, hexToRgba(colors[1], alpha));
+    return grad;
+  }
+
+  // Auto-picks readable text/highlight colours for a custom background.
+  function contrastFor(colors) {
+    const dark = !avgIsLight(colors);
+    return { text: dark ? '#FFFFFF' : '#000000', highlight: dark ? '#FFD54F' : '#D32F2F' };
+  }
+
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    const toHex = x => Math.round(255 * x).toString(16).padStart(2, '0');
+    return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+  }
+
+  // A fresh, reasonably pleasant random 2-colour gradient each time it's called.
+  function randomGradientColors() {
+    const h1 = Math.floor(Math.random() * 360);
+    const h2 = (h1 + 40 + Math.floor(Math.random() * 120)) % 360;
+    const s = 65 + Math.floor(Math.random() * 20);
+    const l = 42 + Math.floor(Math.random() * 16);
+    return [hslToHex(h1, s, l), hslToHex(h2, s, l)];
+  }
+
+  function buildSwatches() {
+    swatchRow.innerHTML = '';
+    COMBOS.forEach((combo, i) => {
+      const btn = document.createElement('button');
+      const usingCustom = state.fullText && state.customBg;
+      btn.className = 'swatch' + (!usingCustom && i === state.comboIndex ? ' selected' : '');
+      btn.style.background = combo.bg;
+      btn.title = combo.name;
+      btn.addEventListener('click', () => {
+        state.comboIndex = i;
+        state.customBg = null; // preset overrides any gradient/manual colour
+        buildSwatches();
+        drawCard();
+      });
+      swatchRow.appendChild(btn);
+    });
+  }
+  buildSwatches();
 
   function layoutLines(context, wordObjs, maxWidth) {
     const spaceWidth = context.measureText(' ').width;
@@ -234,14 +417,40 @@
     return lines;
   }
 
+  // Draws `img` blurred, covering the whole card (used as a Full Text mode
+  // background). Drawn slightly oversized so blur edge softening stays off-canvas.
+  function drawFullTextBackgroundImage(img, blurPx) {
+    const margin = 40;
+    const targetW = SIZE_W + margin * 2;
+    const targetH = SIZE_H + margin * 2;
+    const targetRatio = targetW / targetH;
+    const imgRatio = img.width / img.height;
+    let baseW, baseH;
+    if (imgRatio > targetRatio) { baseH = img.height; baseW = baseH * targetRatio; }
+    else { baseW = img.width; baseH = baseW / targetRatio; }
+    const cropX = (img.width - baseW) / 2;
+    const cropY = (img.height - baseH) / 2;
+    ctx.save();
+    ctx.filter = `blur(${blurPx}px)`;
+    ctx.drawImage(img, cropX, cropY, baseW, baseH, -margin, -margin, targetW, targetH);
+    ctx.restore();
+  }
+
   function drawCard() {
     ctx.clearRect(0, 0, SIZE_W, SIZE_H);
     const combo = currentCombo();
-    const splitY = Math.round(SIZE_H * state.textRatio);
+    const splitY = state.fullText ? SIZE_H : Math.round(SIZE_H * state.textRatio);
 
-    // ---- TEXT AREA (top) ----
-    ctx.fillStyle = combo.bg;
-    ctx.fillRect(0, 0, SIZE_W, splitY);
+    // ---- BACKGROUND — full canvas in Full Text mode, top area otherwise ----
+    if (state.fullText && state.image) {
+      // Blurred photo behind the text, tinted with the chosen colour so text stays readable
+      drawFullTextBackgroundImage(state.image, 22);
+      ctx.fillStyle = bgFillStyle(combo.bgColors, 0.55);
+      ctx.fillRect(0, 0, SIZE_W, SIZE_H);
+    } else {
+      ctx.fillStyle = bgFillStyle(combo.bgColors);
+      ctx.fillRect(0, 0, SIZE_W, splitY);
+    }
 
     const paddingX = 60;
     const maxWidth = SIZE_W - paddingX * 2;
@@ -273,7 +482,7 @@
       let x = SIZE_W / 2 - lineWidth / 2;
       const y = startY + i * lineHeight;
       lineWords.forEach(w => {
-        ctx.fillStyle = state.redWords.has(w.idx) ? '#E53935' : combo.text;
+        ctx.fillStyle = state.redWords.has(w.idx) ? combo.highlight : combo.text;
         ctx.fillText(w.word, x, y);
         state.wordBoxes.push({
           idx: w.idx,
@@ -286,7 +495,8 @@
       });
     });
 
-    // ---- IMAGE AREA (bottom) ----
+    // ---- IMAGE AREA (bottom) — skipped entirely in Full Text mode ----
+    if (!state.fullText) {
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, splitY, SIZE_W, SIZE_H - splitY);
 
@@ -314,18 +524,29 @@
 
       ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, splitY, targetW, targetH);
     }
+    } // end image-area (!state.fullText)
 
-    // ---- WATERMARK (bottom of image area) — subtle scrim + thin rule + refined label ----
+    // ---- WATERMARK — colour adapts so it stays readable on any background ----
+    // On a photo (normal mode) we always assume it's dark-ish and use light text
+    // with a dark scrim. In Full Text mode the "background" is the chosen combo
+    // colour, so we pick light/dark watermark styling based on its brightness.
+    const wmOnLightBg = state.fullText && avgIsLight(combo.bgColors);
     ctx.save();
-    const scrimH = 130;
-    const scrimGrad = ctx.createLinearGradient(0, SIZE_H - scrimH, 0, SIZE_H);
-    scrimGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    scrimGrad.addColorStop(1, 'rgba(0,0,0,0.38)');
-    ctx.fillStyle = scrimGrad;
-    ctx.fillRect(0, SIZE_H - scrimH, SIZE_W, scrimH);
+
+    if (!state.fullText) {
+      const scrimH = 130;
+      const scrimGrad = ctx.createLinearGradient(0, SIZE_H - scrimH, 0, SIZE_H);
+      scrimGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      scrimGrad.addColorStop(1, 'rgba(0,0,0,0.38)');
+      ctx.fillStyle = scrimGrad;
+      ctx.fillRect(0, SIZE_H - scrimH, SIZE_W, scrimH);
+    }
+
+    const wmLineColor = wmOnLightBg ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.55)';
+    const wmTextColor = wmOnLightBg ? 'rgba(0,0,0,0.85)' : 'rgba(255,255,255,0.92)';
 
     // thin center rule above the wordmark
-    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.strokeStyle = wmLineColor;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(SIZE_W / 2 - 22, SIZE_H - 46);
@@ -335,16 +556,17 @@
     ctx.font = `600 20px "Poppins", Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillStyle = wmTextColor;
     ctx.letterSpacing = '5px';
     ctx.fillText(WATERMARK_TEXT, SIZE_W / 2 + 2, SIZE_H - 26);
     ctx.restore();
 
     const displayRatio = container.clientHeight / SIZE_H;
+    divider.style.display = state.fullText ? 'none' : 'flex';
     divider.style.top = (splitY * displayRatio) + 'px';
     placeholderHint.style.top = (splitY * displayRatio) + 'px';
     placeholderHint.style.height = ((SIZE_H - splitY) * displayRatio) + 'px';
-    placeholderHint.style.display = state.image ? 'none' : 'flex';
+    placeholderHint.style.display = (state.image || state.fullText) ? 'none' : 'flex';
   }
 
   let dragging = false;
@@ -370,7 +592,7 @@
   let lastX = 0, lastY = 0;
 
   canvas.addEventListener('pointerdown', (e) => {
-    if (!state.image) return;
+    if (!state.image || state.fullText) return;
     const rect = container.getBoundingClientRect();
     const splitYDisplay = rect.top + rect.height * state.textRatio;
     if (e.clientY < splitYDisplay) return; // only drag within the image area (bottom), not the text area
@@ -398,11 +620,12 @@
     drawCard();
   });
 
-  // ---- Tap a word in the TEXT area to toggle it red ----
+  // ---- Tap a word in the TEXT area to toggle its highlight colour ----
   canvas.addEventListener('click', (e) => {
     if (!state.text) return;
     const rect = container.getBoundingClientRect();
-    const splitYDisplay = rect.top + rect.height * state.textRatio;
+    const textRatioEffective = state.fullText ? 1 : state.textRatio;
+    const splitYDisplay = rect.top + rect.height * textRatioEffective;
     if (e.clientY >= splitYDisplay) return; // only handle taps inside the text area (top)
 
     const canvasX = (e.clientX - rect.left) / rect.width * SIZE_W;
@@ -424,8 +647,30 @@
   });
   canvas.addEventListener('pointercancel', () => { imgDragging = false; });
 
-  document.getElementById('pickImageBtn').addEventListener('click', () => {
+  pickImageBtn.addEventListener('click', () => {
     fileInput.click();
+  });
+
+  fullTextToggle.addEventListener('change', () => {
+    state.fullText = fullTextToggle.checked;
+    fullTextExtras.style.display = state.fullText ? 'flex' : 'none';
+    drawCard();
+  });
+
+  randomGradientBtn.addEventListener('click', () => {
+    const [c1, c2] = randomGradientColors();
+    const contrast = contrastFor([c1, c2]);
+    state.customBg = { bgColors: [c1, c2], text: contrast.text, highlight: contrast.highlight };
+    buildSwatches();
+    drawCard();
+  });
+
+  bgColorPicker.addEventListener('input', () => {
+    const c = bgColorPicker.value;
+    const contrast = contrastFor([c]);
+    state.customBg = { bgColors: [c], text: contrast.text, highlight: contrast.highlight };
+    buildSwatches();
+    drawCard();
   });
 
   fileInput.addEventListener('change', (e) => {
