@@ -8,7 +8,7 @@
 <title>Relationship Cues — Card Maker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@500;600;700&family=Bebas+Neue&family=Oswald:wght@500;600;700&family=Montserrat:wght@700;800&family=Playfair+Display:wght@700;800&family=Lora:wght@600;700&family=Caveat:wght@600;700&family=Pacifico&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@500;600;700;800&family=Bebas+Neue&family=Oswald:wght@500;600;700&family=Montserrat:wght@700;800&family=Playfair+Display:wght@700;800&family=Lora:wght@600;700&family=Caveat:wght@600;700&family=Pacifico&family=League+Spartan:wght@600;700;800&family=Archivo+Black&family=Raleway:wght@700;800&family=DM+Sans:wght@700;800&family=Nunito:wght@700;800&family=Libre+Baskerville:wght@700&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -147,6 +147,30 @@
     gap: 10px;
     flex-wrap: wrap;
   }
+  .fontRow {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+    flex-shrink: 0;
+  }
+  .fontChip {
+    flex: 0 0 auto;
+    background: #1c1c1c;
+    color: #fff;
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 16px;
+    white-space: nowrap;
+  }
+  .fontChip.selected {
+    border-color: #4CAF50;
+    background: #23331f;
+    box-shadow: 0 0 0 1px #4CAF50;
+  }
   .swatch {
     width: 40px;
     height: 40px;
@@ -216,7 +240,7 @@
     <div class="placeholder-btn" id="placeholderHint">Select an image below</div>
     <div class="divider" id="divider"><div class="bar"></div></div>
   </div>
-  <div class="hint">📌 Drag the image to reposition · use "Zoom" to crop tighter · tap a word in the text to highlight it</div>
+  <div class="hint">📌 Drag the image to reposition · use "Zoom" to crop tighter</div>
 
   <div class="controls">
     <div class="toggleRow">
@@ -230,8 +254,20 @@
     </div>
     <input type="file" id="fileInput" accept="image/*" />
 
+    <label class="small">Font Style</label>
+    <div class="fontRow" id="fontRow"></div>
+
     <label class="small">Colour Style</label>
     <div class="swatchRow" id="swatchRow"></div>
+
+    <label class="small">🖍️ Tap-Word Colour <span style="font-weight:400;color:#666;">tap any word on the card</span></label>
+    <div class="swatchRow" id="tapColorRow"></div>
+    <div class="row">
+      <label class="colorPickBtn" for="tapColorPicker">🎨 Custom Colour
+        <input type="color" id="tapColorPicker" value="#E53935" />
+      </label>
+      <button id="clearTapColorsBtn">✖️ Clear Word Colours</button>
+    </div>
 
     <div class="row" id="fullTextExtras" style="display:none;">
       <button id="randomGradientBtn">🎨 Random Gradient</button>
@@ -269,54 +305,38 @@
   const fullTextToggle = document.getElementById('fullTextToggle');
   const pickImageBtn = document.getElementById('pickImageBtn');
   const swatchRow = document.getElementById('swatchRow');
+  const fontRow = document.getElementById('fontRow');
   const fullTextExtras = document.getElementById('fullTextExtras');
   const randomGradientBtn = document.getElementById('randomGradientBtn');
   const bgColorPicker = document.getElementById('bgColorPicker');
+  const tapColorRow = document.getElementById('tapColorRow');
+  const tapColorPicker = document.getElementById('tapColorPicker');
+  const clearTapColorsBtn = document.getElementById('clearTapColorsBtn');
 
   // Canvas is 4:5 (width:height) — TEXT area on TOP, IMAGE area on BOTTOM
   const SIZE_W = 1080;
   const SIZE_H = 1350;
   const WATERMARK_TEXT = 'RELATIONSHIP CUES';
 
-  // Default font for normal (untapped) text — always Impact/Anton, uppercase.
-  const DEFAULT_FONT = { id: 'anton', stack: '"Anton", Arial, sans-serif', weight: 400 };
-
-  // Pool of fonts a tapped/selected word can land on — picked at random per
-  // tap, never fixed to one colour.
-  const FONT_POOL = [
-    { id: 'anton',      stack: '"Anton", Arial, sans-serif',        weight: 400 },
-    { id: 'poppins',    stack: '"Poppins", Arial, sans-serif',      weight: 700 },
-    { id: 'bebas',      stack: '"Bebas Neue", Arial, sans-serif',   weight: 400 },
-    { id: 'oswald',     stack: '"Oswald", Arial, sans-serif',       weight: 600 },
-    { id: 'montserrat', stack: '"Montserrat", Arial, sans-serif',   weight: 800 },
-    { id: 'playfair',   stack: '"Playfair Display", Georgia, serif', weight: 700 },
-    { id: 'lora',       stack: '"Lora", Georgia, serif',            weight: 600 },
-    { id: 'caveat',     stack: '"Caveat", cursive',                 weight: 700 },
-    { id: 'pacifico',   stack: '"Pacifico", cursive',                weight: 400 },
+  // Pinterest-style card text ke liye sabse popular aur readable fonts —
+  // bold, clean, big-impact fonts jo chhoti screen par bhi clearly padhe jaate hain.
+  const FONT_OPTIONS = [
+    { id: 'anton',        name: 'Anton',           stack: '"Anton", Arial, sans-serif',            weight: 400 },
+    { id: 'bebas',        name: 'Bebas Neue',      stack: '"Bebas Neue", Arial, sans-serif',        weight: 400 },
+    { id: 'montserrat',   name: 'Montserrat',      stack: '"Montserrat", Arial, sans-serif',        weight: 800 },
+    { id: 'poppins',      name: 'Poppins',         stack: '"Poppins", Arial, sans-serif',           weight: 700 },
+    { id: 'oswald',       name: 'Oswald',          stack: '"Oswald", Arial, sans-serif',             weight: 600 },
+    { id: 'leaguespartan',name: 'League Spartan',  stack: '"League Spartan", Arial, sans-serif',    weight: 700 },
+    { id: 'archivoblack', name: 'Archivo Black',   stack: '"Archivo Black", Arial, sans-serif',     weight: 400 },
+    { id: 'raleway',      name: 'Raleway',         stack: '"Raleway", Arial, sans-serif',            weight: 800 },
+    { id: 'dmsans',       name: 'DM Sans',         stack: '"DM Sans", Arial, sans-serif',            weight: 700 },
+    { id: 'nunito',       name: 'Nunito',          stack: '"Nunito", Arial, sans-serif',             weight: 800 },
+    { id: 'playfair',     name: 'Playfair Display',stack: '"Playfair Display", Georgia, serif',      weight: 700 },
+    { id: 'lora',         name: 'Lora',            stack: '"Lora", Georgia, serif',                  weight: 600 },
+    { id: 'baskerville',  name: 'Libre Baskerville',stack: '"Libre Baskerville", Georgia, serif',    weight: 700 },
+    { id: 'caveat',       name: 'Caveat',          stack: '"Caveat", cursive',                       weight: 700 },
+    { id: 'pacifico',     name: 'Pacifico',        stack: '"Pacifico", cursive',                     weight: 400 },
   ];
-
-  // 66+ vibrant, readable colours. Generated as evenly-spaced hues
-  // (golden-angle spacing) at two lightness levels so consecutive entries
-  // are visually distinct.
-  const TAP_COLOR_COUNT = 72;
-  const TAP_COLORS = (() => {
-    const colors = [];
-    const goldenAngle = 137.508;
-    for (let i = 0; i < TAP_COLOR_COUNT; i++) {
-      const hue = (i * goldenAngle) % 360;
-      const l = (i % 2 === 0) ? 52 : 62;
-      colors.push(hslToHex(hue, 82, l));
-    }
-    return colors;
-  })();
-
-  // Every tap/selection step moves to the next entry in this cycle. Each
-  // entry pairs one colour with a RANDOMLY chosen font — colours are never
-  // fixed to a particular font.
-  const STYLE_CYCLE = TAP_COLORS.map(color => ({
-    color,
-    font: FONT_POOL[Math.floor(Math.random() * FONT_POOL.length)]
-  }));
 
   // Selectable text/background colour combinations. `highlight` is the colour
   // a tapped word turns — chosen per combo so it still stands out.
@@ -337,10 +357,19 @@
     { bg: '#2C2C2C', text: '#FFFFFF', highlight: '#FF7043', name: 'Charcoal' },
   ];
 
+  // Palette of colours the user can pick from before tapping a word on the
+  // card — the selected one is what a tapped word turns.
+  const TAP_PALETTE = [
+    '#E53935', '#FF7043', '#FB8C00', '#F5D400', '#FFD54F',
+    '#4CAF50', '#00BFA5', '#00B8D4', '#2196F3', '#3F51B5',
+    '#8E24AA', '#D81B60', '#FFFFFF', '#000000',
+  ];
+
   let state = {
     image: null,
     fullText: false, // when true, no image is needed and text fills the whole card
     comboIndex: 0,    // which COMBOS entry is active
+    font: FONT_OPTIONS[0], // currently selected text font
     customBg: null,   // { bgColors: [hex] or [hex,hex], text, highlight } — Full Text mode only
     textRatio: 0.32,   // fraction of height given to the TEXT area (top)
     fontSize: 56,
@@ -350,9 +379,10 @@
     centerY: null,
     cropW: null,
     cropH: null,
-    wordStyles: new Map(), // idx -> STYLE_CYCLE index (controls both font + colour for that word)
-    selectionSet: null,    // Set of word indices currently being drag-selected (hold-to-select in progress)
-    wordBoxes: []         // hit-test boxes for each drawn word, rebuilt every drawCard()
+    tapColor: TAP_PALETTE[0],  // colour that gets applied when a word is tapped
+    wordColors: {},   // { wordIdx: hexColor } — per-word colour overrides from tapping
+    wordHitboxes: [],  // rebuilt every drawCard(): [{idx, x1, y1, x2, y2}]
+    splitY: 0
   };
 
   // Returns { bgColors: [hex] or [hex,hex], text, highlight }. In Full Text
@@ -417,6 +447,24 @@
     return [hslToHex(h1, s, l), hslToHex(h2, s, l)];
   }
 
+  function buildFontRow() {
+    fontRow.innerHTML = '';
+    FONT_OPTIONS.forEach((f) => {
+      const btn = document.createElement('button');
+      btn.className = 'fontChip' + (f.id === state.font.id ? ' selected' : '');
+      btn.style.fontFamily = f.stack;
+      btn.style.fontWeight = f.weight;
+      btn.textContent = f.name;
+      btn.addEventListener('click', () => {
+        state.font = f;
+        buildFontRow();
+        drawCard();
+      });
+      fontRow.appendChild(btn);
+    });
+  }
+  buildFontRow();
+
   function buildSwatches() {
     swatchRow.innerHTML = '';
     COMBOS.forEach((combo, i) => {
@@ -435,6 +483,22 @@
     });
   }
   buildSwatches();
+
+  function buildTapColorRow() {
+    tapColorRow.innerHTML = '';
+    TAP_PALETTE.forEach((color) => {
+      const btn = document.createElement('button');
+      btn.className = 'swatch' + (color.toLowerCase() === state.tapColor.toLowerCase() ? ' selected' : '');
+      btn.style.background = color;
+      btn.title = color;
+      btn.addEventListener('click', () => {
+        state.tapColor = color;
+        buildTapColorRow();
+      });
+      tapColorRow.appendChild(btn);
+    });
+  }
+  buildTapColorRow();
 
   function layoutLines(wordObjs, maxWidth) {
     const spaceWidth = ctx.measureText(' ').width;
@@ -479,6 +543,7 @@
     ctx.clearRect(0, 0, SIZE_W, SIZE_H);
     const combo = currentCombo();
     const splitY = state.fullText ? SIZE_H : Math.round(SIZE_H * state.textRatio);
+    state.splitY = splitY;
 
     // ---- BACKGROUND — full canvas in Full Text mode, top area otherwise ----
     if (state.fullText && state.image) {
@@ -493,22 +558,12 @@
 
     const paddingX = 60;
     const maxWidth = SIZE_W - paddingX * 2;
-    const baseFontStr = `${DEFAULT_FONT.weight} ${state.fontSize}px ${DEFAULT_FONT.stack}`;
+    const baseFontStr = `${state.font.weight} ${state.fontSize}px ${state.font.stack}`;
     ctx.font = baseFontStr;
     ctx.textBaseline = 'middle';
 
-    // A word with an assigned style (via tap or multi-select) uses that
-    // style's own font at the exact same pixel size — no bold, no size change.
-    function fontStrFor(styleIdx) {
-      if (styleIdx === undefined) return baseFontStr;
-      const f = STYLE_CYCLE[styleIdx].font;
-      return `${f.weight} ${state.fontSize}px ${f.stack}`;
-    }
-    function measureWord(word, styleIdx) {
-      ctx.font = fontStrFor(styleIdx);
-      const w = ctx.measureText(word).width;
-      ctx.font = baseFontStr;
-      return w;
+    function measureWord(word) {
+      return ctx.measureText(word).width;
     }
 
     const paragraphs = (state.text || '').split(/\n/);
@@ -522,9 +577,7 @@
       }
       const wordObjs = paraWords.map(word => {
         const idx = globalIdx++;
-        const styleIdx = state.wordStyles.get(idx);
-        const selected = !!(state.selectionSet && state.selectionSet.has(idx));
-        return { word, idx, styleIdx, selected, width: measureWord(word, styleIdx) };
+        return { word, idx, width: measureWord(word) };
       });
       layoutLines(wordObjs, maxWidth).forEach(l => lines.push(l));
     });
@@ -542,35 +595,23 @@
       cursorY += h / 2;
     });
 
-    state.wordBoxes = [];
     ctx.textAlign = 'left';
+    state.wordHitboxes = [];
     lines.forEach((lineWords, i) => {
       const lineWidth = lineWords.reduce((sum, w) => sum + w.width, 0) + spaceWidth * (lineWords.length - 1);
       let x = SIZE_W / 2 - lineWidth / 2;
       const y = lineYs[i];
       lineWords.forEach(w => {
-        const halfH = state.fontSize / 2;
-        // Selection highlight — a soft rounded band behind words currently
-        // being drag-selected, like native text selection.
-        if (w.selected) {
-          ctx.fillStyle = 'rgba(76,175,80,0.38)';
-          const pad = 4;
-          ctx.fillRect(x - pad, y - halfH - pad, w.width + pad * 2, state.fontSize + pad * 2);
-        }
-        ctx.font = fontStrFor(w.styleIdx);
-        ctx.fillStyle = w.styleIdx !== undefined ? STYLE_CYCLE[w.styleIdx].color : combo.text;
+        ctx.fillStyle = state.wordColors[w.idx] || combo.text;
         ctx.fillText(w.word, x, y);
-        state.wordBoxes.push({
+        state.wordHitboxes.push({
           idx: w.idx,
-          x0: x,
-          y0: y - halfH,
-          x1: x + w.width,
-          y1: y + halfH
+          x1: x, y1: y - lineHeight / 2,
+          x2: x + w.width, y2: y + lineHeight / 2
         });
         x += w.width + spaceWidth;
       });
     });
-    ctx.font = baseFontStr;
 
     // ---- IMAGE AREA (bottom) — skipped entirely in Full Text mode ----
     if (!state.fullText) {
@@ -646,6 +687,27 @@
     placeholderHint.style.display = (state.image || state.fullText) ? 'none' : 'flex';
   }
 
+  // Converts a pointer event's client coords into canvas-pixel coords
+  // (the 1080x1350 space drawCard() works in), regardless of on-screen scale.
+  function canvasPointFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (SIZE_W / rect.width),
+      y: (e.clientY - rect.top) * (SIZE_H / rect.height)
+    };
+  }
+
+  function wordAtCanvasPoint(pt) {
+    const pad = 6; // small tolerance so tapping near a word's edge still hits it
+    for (const box of state.wordHitboxes) {
+      if (pt.x >= box.x1 - pad && pt.x <= box.x2 + pad &&
+          pt.y >= box.y1 - pad && pt.y <= box.y2 + pad) {
+        return box.idx;
+      }
+    }
+    return null;
+  }
+
   let dragging = false;
   function ratioFromClientY(clientY) {
     const rect = container.getBoundingClientRect();
@@ -665,170 +727,72 @@
   divider.addEventListener('pointercancel', () => { dragging = false; });
 
   // ---- Move/reposition the image by dragging it (image area is BOTTOM) ----
-  // ---- Tap a word in the TEXT area to cycle its style; hold + drag to select multiple words at once (like text selection) ----
+  // ---- OR tap a word in the text area to recolour it ----
   let imgDragging = false;
   let lastX = 0, lastY = 0;
-
-  let textGestureActive = false;
-  let selecting = false;
-  let selectionAnchorIdx = null;
-  let textDownIdx = null;
-  let textDownX = 0, textDownY = 0;
-  let longPressTimer = null;
-  const LONG_PRESS_MS = 380;
-  const MOVE_CANCEL_PX = 12;
-
-  function clientToCanvasPoint(clientX, clientY) {
-    const rect = container.getBoundingClientRect();
-    return {
-      x: (clientX - rect.left) / rect.width * SIZE_W,
-      y: (clientY - rect.top) / rect.height * SIZE_H
-    };
-  }
-
-  // nearest=true snaps to the closest word even if the finger is slightly
-  // off it — makes drag-selection feel smooth, like native text selection.
-  function findWordIdxAt(canvasX, canvasY, nearest) {
-    const exact = state.wordBoxes.find(b =>
-      canvasX >= b.x0 && canvasX <= b.x1 && canvasY >= b.y0 && canvasY <= b.y1
-    );
-    if (exact) return exact.idx;
-    if (!nearest || !state.wordBoxes.length) return null;
-    let best = null, bestDist = Infinity;
-    state.wordBoxes.forEach(b => {
-      const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
-      const d = Math.hypot(canvasX - cx, canvasY - cy);
-      if (d < bestDist) { bestDist = d; best = b; }
-    });
-    return best ? best.idx : null;
-  }
-
-  // Single tap on one word: advance just that word to the next style
-  // (font + colour together), looping back to normal after the last one.
-  function cycleWordStyle(idx) {
-    const current = state.wordStyles.get(idx);
-    if (current === undefined) state.wordStyles.set(idx, 0);
-    else if (current + 1 < STYLE_CYCLE.length) state.wordStyles.set(idx, current + 1);
-    else state.wordStyles.delete(idx);
-  }
-
-  // Releasing a multi-word selection: the whole group gets the SAME next
-  // style at once, so re-selecting the same group keeps cycling it together.
-  function applyStyleToGroup(idxSet) {
-    if (!idxSet || idxSet.size === 0) return;
-    const idxs = Array.from(idxSet);
-    const refIdx = Math.min(...idxs);
-    const current = state.wordStyles.get(refIdx);
-    let next;
-    if (current === undefined) next = 0;
-    else if (current + 1 < STYLE_CYCLE.length) next = current + 1;
-    else next = undefined;
-    idxs.forEach(i => {
-      if (next === undefined) state.wordStyles.delete(i);
-      else state.wordStyles.set(i, next);
-    });
-  }
+  let tapCandidate = null; // { startClientX, startClientY, canvasPt }
+  const TAP_MOVE_TOLERANCE = 10; // px on screen — beyond this it's a drag, not a tap
 
   canvas.addEventListener('pointerdown', (e) => {
-    const rect = container.getBoundingClientRect();
-    const textRatioEffective = state.fullText ? 1 : state.textRatio;
-    const splitYDisplay = rect.top + rect.height * textRatioEffective;
+    const pt = canvasPointFromEvent(e);
+    const inImageArea = !state.fullText && state.image && pt.y >= state.splitY;
 
-    if (e.clientY < splitYDisplay) {
-      // ---- inside the TEXT area ----
-      if (!state.text) return;
-      textGestureActive = true;
-      selecting = false;
-      state.selectionSet = null;
-      textDownX = e.clientX;
-      textDownY = e.clientY;
-      const p = clientToCanvasPoint(e.clientX, e.clientY);
-      textDownIdx = findWordIdxAt(p.x, p.y, false);
-      clearTimeout(longPressTimer);
-      if (textDownIdx !== null) {
-        longPressTimer = setTimeout(() => {
-          selecting = true;
-          selectionAnchorIdx = textDownIdx;
-          state.selectionSet = new Set([textDownIdx]);
-          drawCard();
-        }, LONG_PRESS_MS);
-      }
+    if (inImageArea) {
+      imgDragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
       canvas.setPointerCapture(e.pointerId);
-      return;
+    } else {
+      tapCandidate = { startClientX: e.clientX, startClientY: e.clientY, canvasPt: pt };
+      canvas.setPointerCapture(e.pointerId);
     }
-
-    // ---- inside the IMAGE area (unchanged) ----
-    if (!state.image || state.fullText) return;
-    imgDragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    canvas.setPointerCapture(e.pointerId);
   });
 
   canvas.addEventListener('pointermove', (e) => {
-    if (textGestureActive) {
-      if (!selecting) {
-        const dx = e.clientX - textDownX, dy = e.clientY - textDownY;
-        if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) clearTimeout(longPressTimer);
-        return;
+    if (imgDragging && state.image) {
+      const rect = container.getBoundingClientRect();
+      const dxDisplay = e.clientX - lastX;
+      const dyDisplay = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      const displayImageHeight = rect.height * (1 - state.textRatio);
+      const scaleFactorX = state.cropW / rect.width;
+      const scaleFactorY = state.cropH / displayImageHeight;
+
+      state.centerX -= dxDisplay * scaleFactorX;
+      state.centerY -= dyDisplay * scaleFactorY;
+
+      drawCard();
+    } else if (tapCandidate) {
+      const movedX = Math.abs(e.clientX - tapCandidate.startClientX);
+      const movedY = Math.abs(e.clientY - tapCandidate.startClientY);
+      if (movedX > TAP_MOVE_TOLERANCE || movedY > TAP_MOVE_TOLERANCE) {
+        tapCandidate = null; // moved too much — treat as a scroll/drag, not a tap
       }
-      const p = clientToCanvasPoint(e.clientX, e.clientY);
-      const hitIdx = findWordIdxAt(p.x, p.y, true);
-      if (hitIdx !== null) {
-        const lo = Math.min(selectionAnchorIdx, hitIdx);
-        const hi = Math.max(selectionAnchorIdx, hitIdx);
-        const newSet = new Set();
-        for (let i = lo; i <= hi; i++) newSet.add(i);
-        state.selectionSet = newSet;
-        drawCard();
-      }
-      return;
     }
-
-    if (!imgDragging || !state.image) return;
-    const rect = container.getBoundingClientRect();
-    const dxDisplay = e.clientX - lastX;
-    const dyDisplay = e.clientY - lastY;
-    lastX = e.clientX;
-    lastY = e.clientY;
-
-    const displayImageHeight = rect.height * (1 - state.textRatio);
-    const scaleFactorX = state.cropW / rect.width;
-    const scaleFactorY = state.cropH / displayImageHeight;
-
-    state.centerX -= dxDisplay * scaleFactorX;
-    state.centerY -= dyDisplay * scaleFactorY;
-
-    drawCard();
   });
 
   canvas.addEventListener('pointerup', (e) => {
-    if (textGestureActive) {
-      clearTimeout(longPressTimer);
-      if (selecting && state.selectionSet && state.selectionSet.size > 0) {
-        applyStyleToGroup(state.selectionSet); // held + dragged: style the whole group together
-      } else if (textDownIdx !== null) {
-        cycleWordStyle(textDownIdx); // quick tap: style just this one word
+    if (tapCandidate) {
+      const idx = wordAtCanvasPoint(tapCandidate.canvasPt);
+      if (idx !== null) {
+        if (state.wordColors[idx] === state.tapColor) {
+          delete state.wordColors[idx]; // tapping the same colour again clears it
+        } else {
+          state.wordColors[idx] = state.tapColor;
+        }
+        drawCard();
       }
-      state.selectionSet = null;
-      selecting = false;
-      textGestureActive = false;
-      textDownIdx = null;
-      try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
-      drawCard();
-      return;
     }
     imgDragging = false;
+    tapCandidate = null;
     try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
   });
 
   canvas.addEventListener('pointercancel', () => {
-    clearTimeout(longPressTimer);
-    textGestureActive = false;
-    selecting = false;
-    state.selectionSet = null;
-    textDownIdx = null;
     imgDragging = false;
+    tapCandidate = null;
   });
 
   pickImageBtn.addEventListener('click', () => {
@@ -857,6 +821,16 @@
     drawCard();
   });
 
+  tapColorPicker.addEventListener('input', () => {
+    state.tapColor = tapColorPicker.value;
+    buildTapColorRow();
+  });
+
+  clearTapColorsBtn.addEventListener('click', () => {
+    state.wordColors = {};
+    drawCard();
+  });
+
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -879,8 +853,7 @@
 
   factText.addEventListener('input', () => {
     state.text = factText.value;
-    state.wordStyles.clear();
-    state.selectionSet = null;
+    state.wordColors = {}; // word positions shift with new text, so old taps no longer apply
     drawCard();
   });
   fontSizeInput.addEventListener('input', () => {
