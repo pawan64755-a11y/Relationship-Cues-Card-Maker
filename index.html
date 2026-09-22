@@ -8,7 +8,7 @@
 <title>Relationship Cues — Card Maker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@500;600;700&family=Bebas+Neue&family=Oswald:wght@500;600;700&family=Montserrat:wght@700;800&family=Playfair+Display:wght@700;800&family=Lora:wght@600;700&family=Caveat:wght@600;700&family=Pacifico&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
@@ -196,6 +196,45 @@
     gap: 8px;
     cursor: pointer;
   }
+  .fontRow {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 0 0 auto;
+    min-height: 70px;
+    padding: 2px 2px 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fontBtn {
+    flex: 0 0 auto;
+    min-width: 68px;
+    height: 62px;
+    background: #1c1c1c;
+    border: 2px solid #3a3a3a;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 4px 12px;
+    color: #ccc;
+    font-size: 10.5px;
+    font-family: 'Poppins', sans-serif;
+  }
+  .fontBtn .preview {
+    font-size: 20px;
+    line-height: 1;
+    color: #fff;
+  }
+  .fontBtn.selected {
+    border-color: #4CAF50;
+    color: #4CAF50;
+  }
+  .fontBtn.selected .preview {
+    color: #4CAF50;
+  }
   .colorPickBtn input[type=color] {
     width: 26px;
     height: 26px;
@@ -229,6 +268,9 @@
       <button id="saveBtn" class="primary">💾 Save Post</button>
     </div>
     <input type="file" id="fileInput" accept="image/*" />
+
+    <label class="small">Font Style</label>
+    <div class="fontRow" id="fontRow"></div>
 
     <label class="small">Colour Style</label>
     <div class="swatchRow" id="swatchRow"></div>
@@ -269,6 +311,7 @@
   const fullTextToggle = document.getElementById('fullTextToggle');
   const pickImageBtn = document.getElementById('pickImageBtn');
   const swatchRow = document.getElementById('swatchRow');
+  const fontRow = document.getElementById('fontRow');
   const fullTextExtras = document.getElementById('fullTextExtras');
   const randomGradientBtn = document.getElementById('randomGradientBtn');
   const bgColorPicker = document.getElementById('bgColorPicker');
@@ -276,8 +319,25 @@
   // Canvas is 4:5 (width:height) — TEXT area on TOP, IMAGE area on BOTTOM
   const SIZE_W = 1080;
   const SIZE_H = 1350;
-  const FONT_STACK = '"Anton", "Poppins", Arial, sans-serif';
   const WATERMARK_TEXT = 'RELATIONSHIP CUES';
+
+  // 9 Pinterest-friendly font styles for the on-card text. `upper` controls
+  // whether the words are shown in caps (bold/impact styles) or natural case
+  // (script/serif styles, which read better mixed-case).
+  const FONT_STYLES = [
+    { id: 'anton',      label: 'Impact',      stack: '"Anton", Arial, sans-serif',            weight: 400, upper: true  },
+    { id: 'poppins',    label: 'Modern',      stack: '"Poppins", Arial, sans-serif',           weight: 700, upper: true  },
+    { id: 'bebas',      label: 'Bold Caps',   stack: '"Bebas Neue", Arial, sans-serif',        weight: 400, upper: true  },
+    { id: 'oswald',     label: 'Condensed',   stack: '"Oswald", Arial, sans-serif',             weight: 600, upper: true  },
+    { id: 'montserrat', label: 'Geometric',   stack: '"Montserrat", Arial, sans-serif',        weight: 800, upper: true  },
+    { id: 'playfair',   label: 'Elegant',     stack: '"Playfair Display", Georgia, serif',     weight: 700, upper: false },
+    { id: 'lora',       label: 'Classic',     stack: '"Lora", Georgia, serif',                 weight: 600, upper: false },
+    { id: 'caveat',     label: 'Handwritten', stack: '"Caveat", cursive',                      weight: 700, upper: false },
+    { id: 'pacifico',   label: 'Script',      stack: '"Pacifico", cursive',                    weight: 400, upper: false },
+  ];
+  function currentFont() {
+    return FONT_STYLES.find(f => f.id === state.fontFamily) || FONT_STYLES[0];
+  }
 
   // Selectable text/background colour combinations. `highlight` is the colour
   // a tapped word turns — chosen per combo so it still stands out.
@@ -302,6 +362,7 @@
     image: null,
     fullText: false, // when true, no image is needed and text fills the whole card
     comboIndex: 0,    // which COMBOS entry is active
+    fontFamily: 'anton', // which FONT_STYLES entry is active
     customBg: null,   // { bgColors: [hex] or [hex,hex], text, highlight } — Full Text mode only
     textRatio: 0.32,   // fraction of height given to the TEXT area (top)
     fontSize: 56,
@@ -396,20 +457,48 @@
   }
   buildSwatches();
 
-  function layoutLines(context, wordObjs, maxWidth) {
-    const spaceWidth = context.measureText(' ').width;
+  function buildFontButtons() {
+    fontRow.innerHTML = '';
+    FONT_STYLES.forEach((f) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fontBtn' + (f.id === state.fontFamily ? ' selected' : '');
+
+      const preview = document.createElement('span');
+      preview.className = 'preview';
+      preview.textContent = 'Aa';
+      preview.style.fontFamily = f.stack;
+      preview.style.fontWeight = String(f.weight);
+      if (f.upper) preview.style.textTransform = 'uppercase';
+
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = f.label;
+
+      btn.appendChild(preview);
+      btn.appendChild(labelSpan);
+      btn.addEventListener('click', () => {
+        state.fontFamily = f.id;
+        buildFontButtons();
+        drawCard();
+      });
+      fontRow.appendChild(btn);
+    });
+  }
+  buildFontButtons();
+
+  function layoutLines(wordObjs, maxWidth) {
+    const spaceWidth = ctx.measureText(' ').width;
     const lines = [];
     let currentLine = [];
     let currentWidth = 0;
-    wordObjs.forEach(({ word, idx }) => {
-      const w = context.measureText(word).width;
-      const addWidth = currentLine.length ? spaceWidth + w : w;
+    wordObjs.forEach((w) => {
+      const addWidth = currentLine.length ? spaceWidth + w.width : w.width;
       if (currentWidth + addWidth > maxWidth && currentLine.length) {
         lines.push(currentLine);
-        currentLine = [{ word, idx, width: w }];
-        currentWidth = w;
+        currentLine = [w];
+        currentWidth = w.width;
       } else {
-        currentLine.push({ word, idx, width: w });
+        currentLine.push(w);
         currentWidth += addWidth;
       }
     });
@@ -454,46 +543,76 @@
 
     const paddingX = 60;
     const maxWidth = SIZE_W - paddingX * 2;
-    ctx.font = `400 ${state.fontSize}px ${FONT_STACK}`;
+    const fontDef = currentFont();
+    const baseFontStr = `${fontDef.weight} ${state.fontSize}px ${fontDef.stack}`;
+    // Tapped ("highlighted") words are drawn bigger and bolder, same family.
+    const HI_SCALE = 1.22;
+    const hiFontSize = Math.round(state.fontSize * HI_SCALE);
+    const hiWeight = Math.min(900, Math.max(700, fontDef.weight + 200));
+    const hiFontStr = `${hiWeight} ${hiFontSize}px ${fontDef.stack}`;
+    ctx.font = baseFontStr;
     ctx.textBaseline = 'middle';
+
+    function measureWord(word, hi) {
+      ctx.font = hi ? hiFontStr : baseFontStr;
+      const w = ctx.measureText(word).width;
+      ctx.font = baseFontStr;
+      return w;
+    }
 
     const paragraphs = (state.text || '').split(/\n/);
     let globalIdx = 0;
     const lines = [];
     paragraphs.forEach(para => {
-      const paraWords = para.toUpperCase().split(/\s+/).filter(Boolean);
+      const paraWords = (fontDef.upper ? para.toUpperCase() : para).split(/\s+/).filter(Boolean);
       if (paraWords.length === 0) {
         lines.push([]); // preserve an intentional blank line
         return;
       }
-      const wordObjs = paraWords.map(word => ({ word, idx: globalIdx++ }));
-      layoutLines(ctx, wordObjs, maxWidth).forEach(l => lines.push(l));
+      const wordObjs = paraWords.map(word => {
+        const idx = globalIdx++;
+        const hi = state.redWords.has(idx);
+        return { word, idx, hi, width: measureWord(word, hi) };
+      });
+      layoutLines(wordObjs, maxWidth).forEach(l => lines.push(l));
     });
     const spaceWidth = ctx.measureText(' ').width;
-    const lineHeight = state.fontSize * 1.18;
-    const totalTextHeight = lines.length * lineHeight;
+    // Each line's height follows its tallest word (bigger if it contains a highlighted word).
+    const lineHeights = lines.map(lineWords =>
+      (lineWords.some(w => w.hi) ? hiFontSize : state.fontSize) * 1.18
+    );
+    const totalTextHeight = lineHeights.reduce((a, b) => a + b, 0);
     const textAreaCenterY = splitY / 2;
-    let startY = textAreaCenterY - totalTextHeight / 2 + lineHeight / 2;
+    const lineYs = [];
+    let cursorY = textAreaCenterY - totalTextHeight / 2;
+    lineHeights.forEach(h => {
+      cursorY += h / 2;
+      lineYs.push(cursorY);
+      cursorY += h / 2;
+    });
 
     state.wordBoxes = [];
     ctx.textAlign = 'left';
     lines.forEach((lineWords, i) => {
       const lineWidth = lineWords.reduce((sum, w) => sum + w.width, 0) + spaceWidth * (lineWords.length - 1);
       let x = SIZE_W / 2 - lineWidth / 2;
-      const y = startY + i * lineHeight;
+      const y = lineYs[i];
       lineWords.forEach(w => {
-        ctx.fillStyle = state.redWords.has(w.idx) ? combo.highlight : combo.text;
+        ctx.font = w.hi ? hiFontStr : baseFontStr;
+        ctx.fillStyle = w.hi ? combo.highlight : combo.text;
         ctx.fillText(w.word, x, y);
+        const halfH = (w.hi ? hiFontSize : state.fontSize) / 2;
         state.wordBoxes.push({
           idx: w.idx,
           x0: x,
-          y0: y - state.fontSize / 2,
+          y0: y - halfH,
           x1: x + w.width,
-          y1: y + state.fontSize / 2
+          y1: y + halfH
         });
         x += w.width + spaceWidth;
       });
     });
+    ctx.font = baseFontStr;
 
     // ---- IMAGE AREA (bottom) — skipped entirely in Full Text mode ----
     if (!state.fullText) {
