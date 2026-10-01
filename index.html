@@ -276,6 +276,15 @@
       </label>
     </div>
 
+    <div id="fullTextSliders" style="display:none; flex-direction:column; gap:10px;">
+      <label class="small">🌫️ Image Blur <span id="bgBlurVal">22</span>px
+        <input type="range" id="bgBlur" min="0" max="60" value="22" />
+      </label>
+      <label class="small">🎨 Text Background (readability) <span id="bgTintVal">55</span>%
+        <input type="range" id="bgTint" min="0" max="100" value="55" />
+      </label>
+    </div>
+
     <textarea id="factText" placeholder="Type your text here..."></textarea>
 
     <label class="small">Font Size <span id="fontSizeVal">56</span>px
@@ -307,6 +316,11 @@
   const swatchRow = document.getElementById('swatchRow');
   const fontRow = document.getElementById('fontRow');
   const fullTextExtras = document.getElementById('fullTextExtras');
+  const fullTextSliders = document.getElementById('fullTextSliders');
+  const bgBlurInput = document.getElementById('bgBlur');
+  const bgBlurVal = document.getElementById('bgBlurVal');
+  const bgTintInput = document.getElementById('bgTint');
+  const bgTintVal = document.getElementById('bgTintVal');
   const randomGradientBtn = document.getElementById('randomGradientBtn');
   const bgColorPicker = document.getElementById('bgColorPicker');
   const tapColorRow = document.getElementById('tapColorRow');
@@ -368,6 +382,8 @@
   let state = {
     image: null,
     fullText: false, // when true, no image is needed and text fills the whole card
+    bgBlur: 22,       // Full Text mode: blur (px) applied to the background photo
+    bgTint: 0.55,     // Full Text mode: opacity of the colour layer between photo and text
     comboIndex: 0,    // which COMBOS entry is active
     font: FONT_OPTIONS[0], // currently selected text font
     customBg: null,   // { bgColors: [hex] or [hex,hex], text, highlight } — Full Text mode only
@@ -548,8 +564,8 @@
     // ---- BACKGROUND — full canvas in Full Text mode, top area otherwise ----
     if (state.fullText && state.image) {
       // Blurred photo behind the text, tinted with the chosen colour so text stays readable
-      drawFullTextBackgroundImage(state.image, 22);
-      ctx.fillStyle = bgFillStyle(combo.bgColors, 0.55);
+      drawFullTextBackgroundImage(state.image, state.bgBlur);
+      ctx.fillStyle = bgFillStyle(combo.bgColors, state.bgTint);
       ctx.fillRect(0, 0, SIZE_W, SIZE_H);
     } else {
       ctx.fillStyle = bgFillStyle(combo.bgColors);
@@ -802,6 +818,18 @@
   fullTextToggle.addEventListener('change', () => {
     state.fullText = fullTextToggle.checked;
     fullTextExtras.style.display = state.fullText ? 'flex' : 'none';
+    fullTextSliders.style.display = state.fullText ? 'flex' : 'none';
+    drawCard();
+  });
+
+  bgBlurInput.addEventListener('input', () => {
+    state.bgBlur = parseInt(bgBlurInput.value, 10);
+    bgBlurVal.textContent = state.bgBlur;
+    drawCard();
+  });
+  bgTintInput.addEventListener('input', () => {
+    state.bgTint = parseInt(bgTintInput.value, 10) / 100;
+    bgTintVal.textContent = bgTintInput.value;
     drawCard();
   });
 
