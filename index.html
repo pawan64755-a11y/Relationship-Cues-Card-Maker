@@ -291,6 +291,22 @@
       <input type="range" id="fontSize" min="28" max="150" value="56" />
     </label>
 
+    <div class="toggleRow">
+      <span>✏️ Text Outline</span>
+      <input type="checkbox" id="outlineToggle" />
+    </div>
+    <div id="outlineControls" style="display:none; flex-direction:column; gap:10px;">
+      <label class="small">Outline Thickness <span id="outlineWidthVal">8</span>px
+        <input type="range" id="outlineWidth" min="1" max="30" value="8" />
+      </label>
+      <div class="row">
+        <label class="colorPickBtn" for="outlineColorPicker">🖍️ Outline Colour
+          <input type="color" id="outlineColorPicker" value="#000000" />
+        </label>
+        <button id="outlineAutoBtn">✨ Auto Colour</button>
+      </div>
+    </div>
+
     <label class="small">Image Zoom / Crop <span id="zoomVal">100</span>%
       <input type="range" id="zoom" min="100" max="300" value="100" />
     </label>
@@ -317,6 +333,12 @@
   const fontRow = document.getElementById('fontRow');
   const fullTextExtras = document.getElementById('fullTextExtras');
   const fullTextSliders = document.getElementById('fullTextSliders');
+  const outlineToggle = document.getElementById('outlineToggle');
+  const outlineControls = document.getElementById('outlineControls');
+  const outlineWidthInput = document.getElementById('outlineWidth');
+  const outlineWidthVal = document.getElementById('outlineWidthVal');
+  const outlineColorPicker = document.getElementById('outlineColorPicker');
+  const outlineAutoBtn = document.getElementById('outlineAutoBtn');
   const bgBlurInput = document.getElementById('bgBlur');
   const bgBlurVal = document.getElementById('bgBlurVal');
   const bgTintInput = document.getElementById('bgTint');
@@ -382,6 +404,9 @@
   let state = {
     image: null,
     fullText: false, // when true, no image is needed and text fills the whole card
+    outline: false,   // text outline on/off
+    outlineWidth: 8,  // outline thickness in px
+    outlineColor: null, // null = auto (opposite of text colour), else hex
     bgBlur: 22,       // Full Text mode: blur (px) applied to the background photo
     bgTint: 0.55,     // Full Text mode: opacity of the colour layer between photo and text
     comboIndex: 0,    // which COMBOS entry is active
@@ -618,7 +643,17 @@
       let x = SIZE_W / 2 - lineWidth / 2;
       const y = lineYs[i];
       lineWords.forEach(w => {
-        ctx.fillStyle = state.wordColors[w.idx] || combo.text;
+        const wordColor = state.wordColors[w.idx] || combo.text;
+        if (state.outline && state.outlineWidth > 0) {
+          ctx.save();
+          ctx.lineJoin = 'round';
+          ctx.miterLimit = 2;
+          ctx.lineWidth = state.outlineWidth * 2; // half is hidden under the fill
+          ctx.strokeStyle = state.outlineColor || (luminance(wordColor) > 0.5 ? '#000000' : '#FFFFFF');
+          ctx.strokeText(w.word, x, y);
+          ctx.restore();
+        }
+        ctx.fillStyle = wordColor;
         ctx.fillText(w.word, x, y);
         state.wordHitboxes.push({
           idx: w.idx,
@@ -884,6 +919,25 @@
     state.wordColors = {}; // word positions shift with new text, so old taps no longer apply
     drawCard();
   });
+  outlineToggle.addEventListener('change', () => {
+    state.outline = outlineToggle.checked;
+    outlineControls.style.display = state.outline ? 'flex' : 'none';
+    drawCard();
+  });
+  outlineWidthInput.addEventListener('input', () => {
+    state.outlineWidth = parseInt(outlineWidthInput.value, 10);
+    outlineWidthVal.textContent = state.outlineWidth;
+    drawCard();
+  });
+  outlineColorPicker.addEventListener('input', () => {
+    state.outlineColor = outlineColorPicker.value;
+    drawCard();
+  });
+  outlineAutoBtn.addEventListener('click', () => {
+    state.outlineColor = null;
+    drawCard();
+  });
+
   fontSizeInput.addEventListener('input', () => {
     state.fontSize = parseInt(fontSizeInput.value, 10);
     fontSizeVal.textContent = state.fontSize;
